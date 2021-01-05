@@ -23,7 +23,7 @@ apt-get update
 apt-get install -y docker-ce
 
 for GROUP in {docker,kvm,libvirt,ubridge,wireshark}
-    do echo usermod -aG "$GROUP" "$USER"
+    do usermod -aG "$GROUP" "$USER"
 done
 
 touch /etc/systemd/system/gns3server.service
