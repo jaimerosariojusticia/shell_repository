@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+#=============================================================================#
+# Proxy Backup Script
+#
+# by Jaime Rosario Justicia
+#=============================================================================#
+#
+#
+#
+#=============================================================================#
+# Variables
+#=============================================================================#
+day=$(date +%Y-%m-%d)
+ETC_DG=/etc/dansguardian
+TARGZ=proxy-backup-"$day".tgz
+#=============================================================================#
+# Files included for the backup
+#=============================================================================#
+include_files="/etc/apache2 /etc/bind /etc/cron.d/update-motd /etc/crontab $ETC_DG $ETC_DG/languages/ukenglish /etc/default/locale /etc/dhcpd/dhcpd.conf /etc/fstab /etc/group /etc/gshadow /etc/host.conf /etc/hostname /etc/hosts /etc/init.d /etc/iptables.up.rules /etc/krb5.conf /etc/localtime /etc/mime.types /etc/network/interfaces /etc/nsswitch.conf /etc/resolv.conf /etc/samba /etc/squid3 /etc/ssh /etc/syslog.conf /etc/timezone /usr/share/squid3/errors/templates/ /var/www"
+#=============================================================================#
+# Files excluded from the backup
+#=============================================================================#
+exclude_files=$(echo -e --exclude "'"*.20*"'" --exclude "$ETC_DG/authplugins" --exclude "$ETC_DG/contentscanners" --exclude "$ETC_DG/downloadmanagers" --exclude "$ETC_DG/languages/arspanish" --exclude "$ETC_DG/languages" --exclude "$ETC_DG/lists/blacklists" --exclude "$ETC_DG/lists/contentscanners" --exclude "$ETC_DG/lists/downloadmanagers" --exclude "$ETC_DG/lists/phraselists" --exclude "/home/$SUDO_USER/proxy-backup*" --exclude "/var/www/squid-reports" --exclude "'"*.tgz"'" )
+#=============================================================================#
+# Update and cleanup of IPTables and Dansguardian
+#=============================================================================#
+iptables-save > /etc/iptables.up.rules
+find "$ETC_DG" -name '*.20*' -execdir rm {} \;
+#=============================================================================#
+# Starts the backup
+#=============================================================================#
+tar cvfz /tmp/"$TARGZ" "$include_files" "$exclude_files"
+mv /tmp/"$TARGZ" /home/"$SUDO_USER"/

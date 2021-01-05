@@ -1,0 +1,259 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT DROP [0:0]
+-A INPUT   -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT   -m state --state INVALID  -j DROP
+-A INPUT    -m state --state INVALID  -j DROP
+-A FORWARD  -m state --state INVALID  -j DROP
+-A INPUT -p all  -f   -j DROP
+-A FORWARD -p all  -f   -j DROP
+-A OUTPUT -p all  -f   -j DROP
+###
+###
+:OUTBOUND - [0:0]
+:DNS_SERVERS - [0:0]
+-A OUTBOUND -p tcp -m tcp  -s 192.168.1.0/24   --dport 53  -m state --state NEW  -j DNS_SERVERS
+-A OUTBOUND -p udp -m udp  -s 192.168.1.0/24   --dport 53  -m state --state NEW  -j DNS_SERVERS
+-A DNS_SERVERS  -d 8.8.4.4   -j ACCEPT
+-A DNS_SERVERS  -d 8.8.8.8   -j ACCEPT
+-A DNS_SERVERS  -d 128.63.2.53   -j ACCEPT
+-A DNS_SERVERS  -d 192.5.5.241   -j ACCEPT
+-A DNS_SERVERS  -d 192.33.4.12   -j ACCEPT
+-A DNS_SERVERS  -d 192.36.148.17   -j ACCEPT
+-A DNS_SERVERS  -d 192.58.128.30   -j ACCEPT
+-A DNS_SERVERS  -d 192.112.36.4   -j ACCEPT
+-A DNS_SERVERS  -d 192.203.230.10   -j ACCEPT
+-A DNS_SERVERS  -d 192.228.79.201   -j ACCEPT
+-A DNS_SERVERS  -d 193.0.14.129   -j ACCEPT
+-A DNS_SERVERS  -d 198.41.0.4   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.126.10   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.126.20   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.126.30   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.127.10   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.127.20   -j ACCEPT
+-A DNS_SERVERS  -d 198.153.127.30   -j ACCEPT
+-A DNS_SERVERS  -d 199.7.83.42   -j ACCEPT
+-A DNS_SERVERS  -d 199.7.91.13   -j ACCEPT
+-A DNS_SERVERS  -d 202.12.27.33   -j ACCEPT
+-A DNS_SERVERS  -d 208.67.220.123   -j ACCEPT
+-A DNS_SERVERS  -d 208.67.220.220   -j ACCEPT
+-A DNS_SERVERS  -d 208.67.222.123   -j ACCEPT
+-A DNS_SERVERS  -d 208.67.222.222   -j ACCEPT
+###
+-A OUTBOUND -p tcp -m tcp  -s 192.168.1.0/24   --dport 53  -j REJECT
+-A OUTBOUND -p udp -m udp  -s 192.168.1.0/24   --dport 53  -j REJECT
+-A OUTBOUND -p tcp -m tcp  -m multiport  -s 192.168.1.0/24   --dports 21,80,443,554  -m state --state NEW  -j ACCEPT
+-A OUTBOUND -p tcp -m tcp  -m multiport  -s 192.168.1.0/24   --dports 25,110,143,465,587,993,995  -m state --state NEW  -j ACCEPT
+-A OUTBOUND -p tcp -m tcp  -m multiport  -s 192.168.1.0/24   --dports 22,23  -m state --state NEW  -j ACCEPT
+:VPN_OUT - [0:0]
+-A OUTBOUND  -s 192.168.1.0/24   -m state --state NEW  -j VPN_OUT
+-A VPN_OUT -p tcp -m tcp  --dport 1723  -j ACCEPT
+-A VPN_OUT -p udp -m udp  -m multiport  --dports 500,1701  -j ACCEPT
+-A VPN_OUT -p 47  -j ACCEPT
+-A VPN_OUT -p 50  -j ACCEPT
+-A VPN_OUT -p ah  -j ACCEPT
+-A OUTBOUND -p tcp -m tcp  -m multiport  -s 192.168.1.0/24   --dports 5500,5800,5801,5900,5901  -m state --state NEW  -j ACCEPT
+-A OUTBOUND -p tcp -m tcp  -s 192.168.1.0/24   --dport 3389  -m state --state NEW  -j ACCEPT
+-A OUTBOUND -p tcp -m tcp  -s 192.168.1.0/24   -j REJECT  --reject-with tcp-reset
+-A OUTBOUND  -s 192.168.1.0/24   -j REJECT
+###
+###
+:PACKET_FILTER - [0:0]
+-A PACKET_FILTER -p tcp -m tcp  ! --syn  -m state --state NEW  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ACK,FIN FIN  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ACK,PSH PSH  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ACK,SYN ACK,SYN  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ACK,URG URG  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ALL ACK,FIN,RST,SYN  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ALL ACK,FIN,RST,SYN,URG  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ALL ALL  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ALL FIN,PSH,URG  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags ALL NONE  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags FIN,RST FIN,RST  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags FIN,SYN FIN,SYN  -j DROP
+-A PACKET_FILTER -p tcp -m tcp   --tcp-flags RST,SYN RST,SYN  -j DROP
+-A PACKET_FILTER -p tcp -m tcp  -m string --string "cmd.exe" --algo bm  -j DROP
+-A PACKET_FILTER -p tcp -m tcp  -m string --string "download?file=%2e%2e"  --algo bm  -j DROP
+-A PACKET_FILTER  -s 224.0.0.0/24   -j DROP
+-A PACKET_FILTER  -s 239.192.0.0/14   -j DROP
+-A PACKET_FILTER  -s 239.255.0.0/16   -j DROP
+-A PACKET_FILTER  -s 0.0.0.0/8   -j DROP
+-A PACKET_FILTER  -s 169.254.0.0/16   -j DROP
+-A PACKET_FILTER  -s 240.0.0.0/4   -j DROP
+-A PACKET_FILTER  -s 240.0.0.0/5   -j DROP
+-A PACKET_FILTER  -s 248.0.0.0/5   -j DROP
+-A PACKET_FILTER  -s 255.255.255.128/25   -j DROP
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 4/0   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 3  -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 0/0   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 8/0   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 11/0   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 11/1   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p icmp  -m icmp  --icmp-type 30/0   -m state --state NEW  -j ACCEPT
+-A PACKET_FILTER -p udp -m udp  --dport 33434:33524  -m state --state NEW  -j ACCEPT
+###
+###
+:INBOUND - [0:0]
+-A PACKET_FILTER  -j INBOUND
+:FW_SSH - [0:0]
+-A INBOUND -p tcp -m tcp  --dport 22  -m state --state NEW  -j FW_SSH
+-A FW_SSH  -d 172.16.0.10   -j ACCEPT
+-A FW_SSH  -d 192.168.1.1   -j ACCEPT
+:FW_WEBMIN - [0:0]
+-A INBOUND -p tcp -m tcp  --dport 10000  -m state --state NEW  -j FW_WEBMIN
+-A FW_WEBMIN  -d 172.16.0.10   -j ACCEPT
+-A FW_WEBMIN  -d 192.168.1.1   -j ACCEPT
+-A INBOUND -p tcp -m tcp  -d 192.168.1.2   --dport 3389  -m state --state NEW  -j ACCEPT
+-A INBOUND -p tcp -m tcp  -m multiport  -d 192.168.1.2   --dports 5900,5901,5800,5801,5500  -m state --state NEW  -j ACCEPT
+###
+:AD_VPN - [0:0]
+-A INBOUND  -d 192.168.1.2   -m state --state NEW  -j AD_VPN
+-A AD_VPN -p tcp -m tcp  --dport 1723  -j ACCEPT
+-A AD_VPN -p udp -m udp  -m multiport  --dports 500,1701  -j ACCEPT
+-A AD_VPN -p 47  -j ACCEPT
+-A AD_VPN -p 50  -j ACCEPT
+-A AD_VPN -p ah  -j ACCEPT
+###
+-A INBOUND -p tcp -m tcp  -d 192.168.1.204   --dport 2000:2003  -m state --state NEW  -j ACCEPT
+-A INBOUND -p udp -m udp  -d 192.168.1.204   --dport 2000:2003  -m state --state NEW  -j ACCEPT
+-A INBOUND -p tcp -m tcp  -d 192.168.1.207   --dport 4000:4003  -m state --state NEW  -j ACCEPT
+-A INBOUND -p udp -m udp  -d 192.168.1.207   --dport 4000:4003  -m state --state NEW  -j ACCEPT
+-A INBOUND -p tcp -m tcp  -d 192.168.1.206   --dport 9090:9093  -m state --state NEW  -j ACCEPT
+-A INBOUND -p udp -m udp  -d 192.168.1.206   --dport 9090:9093  -m state --state NEW  -j ACCEPT
+-A INBOUND  -j DROP
+###
+###
+:DHCP - [0:0]
+-A DHCP -p udp -m udp  -m multiport  -s 0.0.0.0   -d 255.255.255.255   --dports 68,67  -m state --state NEW  -j ACCEPT
+-A DHCP -p udp -m udp  -m multiport  -s 0.0.0.0   -d 192.168.1.1   --dports 68,67  -m state --state NEW  -j ACCEPT
+-A DHCP -p udp -m udp  -m multiport  -s 192.168.1.0/24   -d 255.255.255.255   --dports 68,67  -m state --state NEW  -j ACCEPT
+-A DHCP -p udp -m udp  -m multiport  -s 192.168.1.0/24   -d 192.168.1.1   --dports 68,67  -m state --state NEW  -j ACCEPT
+-A DHCP -p udp -m udp  -m multiport  -s 192.168.1.1   -d 192.168.1.0/24   --dports 68,67  -m state --state NEW  -j ACCEPT
+-A DHCP -p udp -m udp  -m multiport  --dports 68,67  -j REJECT
+###
+###
+-A INPUT -i p5p1   -s 224.0.0.0/24   -j DROP
+-A INPUT -i p5p1   -s 239.192.0.0/14   -j DROP
+-A INPUT -i p5p1   -s 239.255.0.0/16   -j DROP
+#====
+#-A INPUT -i p5p1   -s 172.16.0.0/12   -j DROP
+-A INPUT -i p5p1   -s 172.16.1.0/24   -j DROP
+-A INPUT -i p5p1   -s 172.16.2.0/23   -j DROP
+-A INPUT -i p5p1   -s 172.16.4.0/22   -j DROP
+-A INPUT -i p5p1   -s 172.16.8.0/21   -j DROP
+-A INPUT -i p5p1   -s 172.16.16.0/20   -j DROP
+-A INPUT -i p5p1   -s 172.16.32.0/19   -j DROP
+-A INPUT -i p5p1   -s 172.16.64.0/18   -j DROP
+-A INPUT -i p5p1   -s 172.16.128.0/17   -j DROP
+-A INPUT -i p5p1   -s 0.0.0.0/8   -j DROP
+-A INPUT -i p5p1   -s 10.0.0.0/8   -j DROP
+-A INPUT -i p5p1   -s 127.0.0.0/8   -j DROP
+-A INPUT -i p5p1   -s 169.254.0.0/16   -j DROP
+-A INPUT -i p5p1   -s 192.168.0.0/16   -j DROP
+-A INPUT -i p5p1   -s 240.0.0.0/4   -j DROP
+-A INPUT -i p5p1   -s 240.0.0.0/5   -j DROP
+-A INPUT -i p5p1   -s 248.0.0.0/5   -j DROP
+-A INPUT -i p5p1   -s 255.255.255.128/25   -j DROP
+#
+-A FORWARD -i p5p1   -s 224.0.0.0/24   -j DROP
+-A FORWARD -i p5p1   -s 239.192.0.0/14   -j DROP
+-A FORWARD -i p5p1   -s 239.255.0.0/16   -j DROP
+#-A FORWARD -i p5p1   -s 172.16.0.0/12   -j DROP
+#==== 
+-A FORWARD -i p5p1   -s 172.16.1.0/24   -j DROP
+-A FORWARD -i p5p1   -s 172.16.2.0/23   -j DROP
+-A FORWARD -i p5p1   -s 172.16.4.0/22   -j DROP
+-A FORWARD -i p5p1   -s 172.16.8.0/21   -j DROP
+-A FORWARD -i p5p1   -s 172.16.16.0/20   -j DROP
+-A FORWARD -i p5p1   -s 172.16.32.0/19   -j DROP
+-A FORWARD -i p5p1   -s 172.16.64.0/18   -j DROP
+-A FORWARD -i p5p1   -s 172.16.128.0/17   -j DROP
+#====
+-A FORWARD -i p5p1   -s 0.0.0.0/8   -j DROP
+-A FORWARD -i p5p1   -s 10.0.0.0/8   -j DROP
+-A FORWARD -i p5p1   -s 127.0.0.0/8   -j DROP
+-A FORWARD -i p5p1   -s 169.254.0.0/16   -j DROP
+-A FORWARD -i p5p1   -s 192.168.0.0/16   -j DROP
+-A FORWARD -i p5p1   -s 240.0.0.0/4   -j DROP
+-A FORWARD -i p5p1   -s 240.0.0.0/5   -j DROP
+-A FORWARD -i p5p1   -s 248.0.0.0/5   -j DROP
+-A FORWARD -i p5p1   -s 255.255.255.128/25   -j DROP
+###
+-A INPUT -i p5p1   -s 172.16.0.10   -j DROP
+-A INPUT -i p5p1   -s 192.168.1.1   -j DROP
+-A FORWARD -i p5p1   -s 172.16.0.10   -j DROP
+-A FORWARD -i p5p1   -s 192.168.1.1   -j DROP
+#
+-A INPUT -i lo   -m state --state NEW  -j ACCEPT
+-A OUTPUT -o lo   -m state --state NEW  -j ACCEPT
+#
+-A INPUT -i p3p1  -p udp -m udp  -m multiport  --dports 68,67  -j DHCP
+-A FORWARD -i p3p1  -p udp -m udp  -m multiport  --dports 68,67  -j DHCP
+-A OUTPUT -o p3p1  -p udp -m udp  -m multiport  --dports 68,67  -j DHCP
+-A FORWARD -o p3p1  -p udp -m udp  -m multiport  --dports 68,67  -j DHCP
+#
+-A INPUT  -s 172.16.0.10   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.1   -m state --state NEW  -j ACCEPT
+-A OUTPUT  -m state --state NEW  -j ACCEPT
+-A OUTPUT  -d 172.16.0.10   -j PACKET_FILTER
+-A INPUT  -d 172.16.0.10   -j PACKET_FILTER
+#
+-A INPUT  -s 192.168.1.0/24   -d 192.168.1.1   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.2   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.204   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.206   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.207   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.208   -m state --state NEW  -j ACCEPT
+-A INPUT  -s 192.168.1.209   -m state --state NEW  -j ACCEPT
+#
+-A FORWARD  -s 192.168.1.2   -m state --state NEW  -j ACCEPT
+-A FORWARD  -s 192.168.1.204   -m state --state NEW  -j ACCEPT
+-A FORWARD  -s 192.168.1.206   -m state --state NEW  -j ACCEPT
+-A FORWARD  -s 192.168.1.207   -m state --state NEW  -j ACCEPT
+-A FORWARD  -s 192.168.1.208   -m state --state NEW  -j ACCEPT
+-A FORWARD  -s 192.168.1.209   -m state --state NEW  -j ACCEPT
+#
+-A INPUT  -s 192.168.1.0/24   -j OUTBOUND
+-A OUTPUT  -s 192.168.1.0/24   -j OUTBOUND
+-A FORWARD  -s 192.168.1.0/24   -j OUTBOUND
+#
+COMMIT
+*nat
+:PREROUTING ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+#
+-A PREROUTING -p tcp -m tcp -m multiport   -d 172.16.0.10  --dports 1723,3389 -j DNAT --to-destination 192.168.1.2
+-A PREROUTING -p udp -m udp -m multiport   -d 172.16.0.10  --dports 500,1701 -j DNAT --to-destination 192.168.1.2
+-A PREROUTING -p 47   -d 172.16.0.10  -j DNAT --to-destination 192.168.1.2
+-A PREROUTING -p 50   -d 172.16.0.10  -j DNAT --to-destination 192.168.1.2
+-A PREROUTING -p 51   -d 172.16.0.10  -j DNAT --to-destination 192.168.1.2
+#
+-A PREROUTING -p tcp -m tcp   -d 172.16.0.10  --dport 2000:2003 -j DNAT --to-destination 192.168.1.204
+-A PREROUTING -p udp -m udp   -d 172.16.0.10  --dport 2000:2003 -j DNAT --to-destination 192.168.1.204
+#
+-A PREROUTING -p tcp -m tcp   -d 172.16.0.10  --dport 4000:4003 -j DNAT --to-destination 192.168.1.206
+-A PREROUTING -p udp -m udp   -d 172.16.0.10  --dport 4000:4003 -j DNAT --to-destination 192.168.1.206
+#
+-A PREROUTING -p tcp -m tcp   -d 172.16.0.10  --dport 9090:9093 -j DNAT --to-destination 192.168.1.207
+-A PREROUTING -p udp -m udp   -d 172.16.0.10  --dport 9090:9093 -j DNAT --to-destination 192.168.1.207
+#
+-A PREROUTING -p tcp -m tcp   -d 172.16.0.10  --dport 8000:8001 -j DNAT --to-destination 192.168.1.208
+-A PREROUTING -p udp -m udp   -d 172.16.0.10  --dport 8000:8001 -j DNAT --to-destination 192.168.1.208
+#
+-A PREROUTING -p tcp -m tcp   -d 172.16.0.10  --dport 9090:9093 -j DNAT --to-destination 192.168.1.174
+-A PREROUTING -p udp -m udp   -d 172.16.0.10  --dport 9090:9093 -j DNAT --to-destination 192.168.1.174
+#
+-A POSTROUTING -o p5p1   -s 192.168.1.2  -j SNAT --to-source 172.16.0.10
+-A POSTROUTING -o p5p1   -s 192.168.1.204  -j SNAT --to-source 172.16.0.10
+-A POSTROUTING -o p5p1   -s 192.168.1.206  -j SNAT --to-source 172.16.0.10
+-A POSTROUTING -o p5p1   -s 192.168.1.207  -j SNAT --to-source 172.16.0.10
+-A POSTROUTING -o p5p1   -s 192.168.1.208  -j SNAT --to-source 172.16.0.10
+-A POSTROUTING -o p5p1   -s 192.168.1.209  -j SNAT --to-source 172.16.0.10
+#
+-A PREROUTING -p tcp -m tcp  -s 192.168.1.0/24   --dport 80 -j REDIRECT --to-ports 3128
+-A POSTROUTING -o p5p1   -s 192.168.1.0/24  -j SNAT --to-source 172.16.0.10
+COMMIT

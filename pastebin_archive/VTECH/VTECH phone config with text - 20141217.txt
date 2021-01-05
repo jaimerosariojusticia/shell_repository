@@ -1,0 +1,20 @@
+#!/bin/bash
+IPLIST=./iplist5.txt
+cat $IPLIST | while read IP_ADDRESS
+	do echo "Now connecting to $IP_ADDRESS"
+	(
+		echo "root"; sleep 1
+		echo "admin_123";sleep 1
+		echo "cd /mnt/flash/ApplicationData/storage/sc14450_fs/configfile"; sleep 1
+		echo "tftp -g -r audio_settings_1.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r audio_settings_2.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r autodial_settings.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r call_settings_1.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r dial_plans.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r SIP_settings.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r SIP_account_2.cfg 10.36.17.227"; sleep 1
+		echo "tftp -g -r network_settings.cfg 10.36.17.227"; sleep 1
+		echo "\r"
+		exit
+		) | nc $IP_ADDRESS 23; echo "$IP_ADDRESS done!"
+	done

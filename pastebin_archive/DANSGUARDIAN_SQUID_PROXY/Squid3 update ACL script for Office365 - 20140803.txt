@@ -1,0 +1,45 @@
+#!/bin/bash
+#==========
+# O365_squid_update.sh
+# by Jaime Rosario
+# Aug. 3, 2014
+#==========
+# Script to update Squid3 Proxy server ACLs for Office365.
+# Microsoft, from time to time, make changes in the Office365 domains/ip/urls.
+# For Squid3 users, you can use this script to get the latest updated addresses.
+# Remember to add the following lines (and uncomment them) in squid.conf:
+## acl domains_office365 dstdomain "/etc/squid3/acls/domains_office365.acl"
+## acl ip_office365 dst "/etc/squid3/acls/ip_office365.acl"
+## acl urls_office365 dstdom_regex -i "/etc/squid3/acls/urls_office365.acl"
+## http_access allow CONNECT domains_office365 ip_office365 urls_office365
+## http_access allow domains_office365 ip_office365 urls_office365
+#==========
+#
+SQUID_ACLS=/etc/squid3/acls
+mkdir "$SQUID_ACLS"
+# Domain names
+{
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep -e '.net$' -e '.com$' | egrep -v "http" | sed 's/^*.//' | sed 's/^/./' |  sort -t "." -k 3,3 -k 2,2
+} >> "$SQUID_ACLS/domains_office365.acl"
+#
+# URLs
+{
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep '^http' | sed 's/^http/'^'http/'
+} >> "$SQUID_ACLS/urls_office365.acl"
+#
+{
+touch /tmp/o3650.ip
+touch /tmp/o3651.ip
+#
+# IP Addresses
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep -E '([0-9]{1,3}\.){3}' | egrep -v "<|=|>|http" > /tmp/o3650.ip
+curl -s "http://technet.microsoft.com/library/dn163583%28v=exchg.150%29.aspx" | grep -E '([0-9]{1,3}\.){3}' | egrep -v "<|=|>" | grep -v ":" >> /tmp/o3650.ip
+#
+grep -e "/" /tmp/o3650.ip > /tmp/o3651.ip
+grep -e ":" /tmp/o3650.ip | cut -d ":" -f1 | awk '{print $1"/32"}' >> /tmp/o3651.ip
+egrep -v "/|:" /tmp/o3650.ip | awk '{print $1"/32"}' >> /tmp/o3651.ip
+#
+sort -k1,1n /tmp/o3651.ip | uniq -u  > "$SQUID_ACLS/ip_office365.acl"
+#
+rm /tmp/o365*.ip
+}

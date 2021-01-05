@@ -1,0 +1,8 @@
+#!/bin/bash
+for IPA in $(seq 16 17)
+        do for IPB in $(seq 0 5)
+                do echo 172."$IPA"."$IPB".0/24 | while read -r NETWORK
+                        do nmap -sP -PO -n "$NETWORK" | egrep "Host" | tail -n +3 | tr '\n' ' ' | sed 's|Nmap|\nNmap|g' | grep "MAC Address" | cut -d " " -f5,8-15
+                done
+        done
+done

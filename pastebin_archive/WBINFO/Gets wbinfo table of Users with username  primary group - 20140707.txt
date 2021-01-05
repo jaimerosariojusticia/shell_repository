@@ -1,0 +1,11 @@
+for ADUSER in $(wbinfo -u --domain="$(wbinfo --own-domain)" | sort)
+do WBSEP=$(wbinfo --separator)
+ADUNAME=$(wbinfo -i "$ADUSER" | cut -d ":" -f5)
+UINFO=$(wbinfo -i "$ADUSER" | cut -d ":" -f3)
+GINFO=$(wbinfo -i "$ADUSER" | cut -d ":" -f4)
+SIDU=$(wbinfo -U "$UINFO")
+SIDG=$(wbinfo -G "$GINFO")
+USERID=$(wbinfo -s "$SIDU" | sed 's/.\{1\}$//' | cut -d "$WBSEP" -f2)
+GROUPID=$(wbinfo -s "$SIDG" | sed 's/.\{1\}$//' | cut -d "$WBSEP" -f2)
+echo -e "$ADUSER:$USERID:$ADUNAME:$GROUPID"
+done | column -tx -s:

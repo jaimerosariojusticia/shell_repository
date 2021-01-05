@@ -1,0 +1,44 @@
+#!/bin/bash
+###
+# Scipt to configure VTech 2-Line Contemporary SIP Cordless Phone (Hotel Models)
+# The VTech SIP phones are linux based devices (but limited in commands)
+# and can connect to a tftp server with the 'tftp' command.
+#
+# The tftp command is used to download the configuration
+# files from an active tftp server.
+# 
+# This will save time as only you need to configure one device, download
+# all the configuration to a tftp server, and using this script, all the
+# connected phones in the network will download the configuration files.
+# you can add another configuration file using the following line:
+#
+# echo -e "tftp -g -r CONFIGURATION_FILE.cfg 10.0.0.150 \r";  
+#
+# The line must be included in the patenthesis as a contiguous line, with
+# no EOL.
+#
+# Change '10.0.0.150' to the current TFTP Server.
+# Change '10.0.0.0/8' to the current network address.
+#
+# First, configure one telephone unit, and download the configuration files
+# from '/mnt/flash/ApplicationData/storage/sc14450_fs/configfile'
+# 
+# Upload all *.cfg files except 'SIP_account_1.cfg' and 'SIP_account_2.cfg'
+###
+nmap -sP 10.0.0.0/8 | grep -v "Host" | tail -n +3 | tr '\n' ' ' | sed 's|Nmap|\nNmap|g' | \
+grep "MAC Address" | cut -d " " -f5,8-15 | grep "VTech" | cut -d " " | \
+while read IP_ADDRESS;
+	do echo "TFTP server is 10.0.0.150";
+	(
+		echo -e "root";
+		echo -e "admin_123";
+		echo -e "cd /mnt/flash/ApplicationData/storage/sc14450_fs/configfile \r";
+		echo -e "tftp -g -r audio_settings_1.cfg 10.0.0.150 \r";
+		echo -e "tftp -g -r audio_settings_2.cfg 10.0.0.150 \r";
+		echo -e "tftp -g -r autodial_settings.cfg 10.0.0.150 \r";
+		echo -e "tftp -g -r call_settings_1.cfg 10.0.0.150 \r";
+		echo -e "tftp -g -r dial_plans.cfg 10.0.0.150 \r";
+		echo -e "tftp -g -r SIP_settings.cfg 10.0.0.150 \r";
+		echo -e "reboot \r"
+	) | nc "$IP_ADDRESS" 23; echo -e "$IP_ADDRESS - done\r"
+	done

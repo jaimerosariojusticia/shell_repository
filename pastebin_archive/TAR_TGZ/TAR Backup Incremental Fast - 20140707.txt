@@ -1,0 +1,62 @@
+#!/bin/bash
+DCSERVER="/mnt/SHARED/tar-backup/DC-SERVER"
+EXCLUDE="/etc/tar-backup/exclude"
+SFEXCLUDE="/etc/tar-backup/scan.exclude"
+UDEXCLUDE="/etc/tar-backup/userdata.exclude"
+FUDEXCLUDE="/etc/tar-backup/userdata.fexclude"
+CURRENTDAY=$(date +%F)
+CURRENTMONTH=$(date +%Y-%m)
+ 
+# Incremental weekly backup ScanFolders
+find /mnt/STORAGE/ScanFolders/ -maxdepth 1 -mindepth 1 -type d | while read -r d
+do DSTDIR=$DCSERVER/ScanFolders
+TARGZ=$(echo "$d" | cut -d "/" -f5)
+if [ -f "$DSTDIR"/"$TARGZ"_full.tgz ]
+then
+        mkdir "$DSTDIR"/"$CURRENTMONTH" > /dev/null 2>&1
+        tar -czf "$DSTDIR"/"$CURRENTMONTH"/"$TARGZ"_"$CURRENTDAY".tgz "$d" --newer-mtime '20 hours ago' -X $SFEXCLUDE
+else
+        tar -czf "$DSTDIR"/"$TARGZ"_full.tgz "$d" -X $SFEXCLUDE
+fi
+done
+ 
+# Incremental weekly backup UserData
+find /mnt/STORAGE/UserData/ -maxdepth 1 -mindepth 1 -type d | while read -r d
+do DSTDIR=$DCSERVER/UserData
+TARGZ=$(echo "$d" | cut -d "/" -f5)
+if [ -f "$DSTDIR"/"$TARGZ"_full.tgz ]
+then
+        mkdir "$DSTDIR"/"$CURRENTMONTH" > /dev/null 2>&1
+        tar -czf "$DSTDIR"/"$CURRENTMONTH"/"$TARGZ"_"$CURRENTDAY".tgz "$d" --newer-mtime '20 hours ago' -X $UDEXCLUDE
+else
+        tar -czf "$DSTDIR"/"$TARGZ"_full.tgz "$d" -X $FUDEXCLUDE
+fi
+done
+ 
+# Incremental weekly backup "PHOTOS"
+find /mnt/STORAGE/PHOTOS/ -maxdepth 1 -mindepth 1 -type d | while read -r d
+do DSTDIR=$DCSERVER/PHOTOS
+TARGZ=$(echo "$d" | cut -d "/" -f5)
+if [ ! -f "$DSTDIR"/"$TARGZ"_full.tgz ]
+then
+        tar -czf "$DSTDIR"/"$TARGZ"_full.tgz "$d"
+fi
+done
+ 
+# Incremental weekly backup "IT SUPPORT"
+#
+SRCDIR=/mnt/STORAGE/IT_SUPPORT/ARCHIVED_DATA
+DSTDIR=$DCSERVER/IT_SUPPORT
+if [ ! -f "$DSTDIR"/ARCHIVED_DATA_full.tgz ]
+then
+        tar -czf "$DSTDIR"/ARCHIVED_DATA_full.tgz "$SRCDIR"/ -X $EXCLUDE
+fi 
+SRCDIR=/mnt/STORAGE/IT_SUPPORT/Support
+DSTDIR=$DCSERVER/IT_SUPPORT
+if [ -f "$DSTDIR"/Support_full.tgz ]
+then
+        mkdir "$DSTDIR"/"$CURRENTMONTH" > /dev/null 2>&1
+        tar -czf "$DSTDIR"/"$CURRENTMONTH"/Support_"$CURRENTDAY".tgz "$SRCDIR"/ --newer-mtime '20 hours ago' -X $EXCLUDE
+else
+        tar -czf "$DSTDIR"/Support_full.tgz "$SRCDIR"/ -X $EXCLUDE
+fi

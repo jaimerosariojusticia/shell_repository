@@ -1,0 +1,1754 @@
+#!/bin/bash
+#
+# Proxy/Content Filter install script
+# by Jaime Rosario Justicia
+# August 3, 2014
+#=============================================================================#
+#
+echo -e "Exporting environment settings"
+DIV_ECHO1=$(echo -e "#$(printf '%.s=' {1..59})#\n")
+DIV_ECHO2=$(echo -e "#$(printf '%.s-' {1..59})#\n")
+WAN_INET=$(netstat -r | grep "default" | awk '{print $8}')
+#-----------------------------------------------------------------------------#
+#	Webmin configuration data
+#-----------------------------------------------------------------------------#
+WEBMIN_BIND=/etc/webmin/bind8/config
+WEBMIN_DG=/etc/webmin/dansguardian/config
+WEBMIN_DHCP=/etc/webmin/dhcpd/config
+DHCP_CONF=/etc/dhcp/dhcpd.conf
+BIND_CONF=/etc/bind/named.conf.options
+WEBMIN_SMB=/etc/webmin/samba/config
+WEBMIN_SQUID=/etc/webmin/squid/config
+WEBMIN_SYSLOG=/etc/webmin/syslog/config
+DG_WBM="http://sourceforge.net/projects/dgwebminmodule/files/dgwebmin-stable/0.7/dgwebmin-0.7.1.wbm/download"
+WEBMIN_NETTOOLS="http://www.niemueller.de/webmin/modules/nettools/nettools-1.060.1.wbm.gz"
+WEBMIN_DWNLD="http://prdownloads.sourceforge.net/webadmin/webmin_1.690_all.deb"
+#-----------------------------------------------------------------------------#
+#	Squid3 configuration files
+#-----------------------------------------------------------------------------#
+SQUID_CONF="/etc/squid3/squid.conf"
+SQUID_ACLS="/etc/squid3/acls"
+#-----------------------------------------------------------------------------#
+#	Dansguardian configuration files
+#-----------------------------------------------------------------------------#
+DG_CONF=/etc/dansguardian/dansguardian.conf
+DG_F1=/etc/dansguardian/dansguardianf1.conf
+DG_F2=/etc/dansguardian/dansguardianf2.conf
+DG_F3=/etc/dansguardian/dansguardianf3.conf
+DG_F4=/etc/dansguardian/dansguardianf4.conf
+DG_F5=/etc/dansguardian/dansguardianf5.conf
+DG_F6=/etc/dansguardian/dansguardianf6.conf
+BU_LIST=/etc/dansguardian/lists/bannedurllist
+EU_LIST=/etc/dansguardian/lists/exceptionurllist
+GU_LIST=/etc/dansguardian/lists/greyurllist
+BS_LIST=/etc/dansguardian/lists/bannedsitelist
+ES_LIST=/etc/dansguardian/lists/exceptionsitelist
+GS_LIST=/etc/dansguardian/lists/greysitelist
+WP_LIST=/etc/dansguardian/lists/weightedphraselist
+BL_DOMAINS=/tmp/site-lists
+BL_URLS=/tmp/url-lists
+BLACKLISTS_DIR=/etc/dansguardian/lists/blacklists
+BP_LIST=/etc/dansguardian/lists/bannedphraselist
+BRXP_LIST=/etc/dansguardian/lists/bannedregexpurllist
+ERXP_LIST=/etc/dansguardian/lists/exceptionregexpurllist
+EP_LIST=/etc/dansguardian/lists/exceptionphraselist
+URXP_LIST=/etc/dansguardian/lists/urlregexplist
+BMT_LIST=/etc/dansguardian/lists/bannedmimetypelist
+EMT_LIST=/etc/dansguardian/lists/exceptionmimetypelist
+BX_LIST=/etc/dansguardian/lists/bannedextensionlist
+DG_LIST=/etc/dansguardian/lists
+DXS_LIST=/etc/dansguardian/lists/defaultexceptionsitelist
+DXU_LIST=/etc/dansguardian/lists/defaultexceptionurllist
+INCLUDE_BL=".Include</etc/dansguardian/lists/blacklists"
+INCLUDE_PL=".Include</etc/dansguardian/lists/phraselists"
+BL_DWNLD="http://urlblacklist.com/cgi-bin/commercialdownload.pl?type=download&file=bigblacklist"
+#-----------------------------------------------------------------------------#
+#	network adapters configuration
+#-----------------------------------------------------------------------------#
+ALL_NET=$(awk '{print $1}' /proc/net/dev | grep ":" | cut -d ":" -f1 | egrep -v "lo|tun")
+NET1="eth1"
+NET2="eth2"
+NET3="eth3"
+NET4="eth4"
+#
+if [[ -z "$WAN_INET" ]]
+then
+#	# WAN_INET  Configuration
+#	WAN_IP=$(ip addr show "$WAN_INET" | grep 'inet ' | column -txs "/" | cut -d " " -f6)
+#	WAN_NET=$(netstat -rn | grep "$WAN_INET" | egrep -v "UG" | column -txs " " | cut -d " " -f1)
+#	WAN_MASK=$(netstat -rn | grep "$WAN_INET" | egrep -v "UG" | column -txs " " | cut -d " " -f5)
+#	WAN_BCAST=$(ip addr show "$WAN_INET" | grep 'inet ' | column -txs "/" | cut -d " " -f10)
+#else
+	echo -e "Primary network adapter has not been found. Check your networking settings."
+exit 0
+fi
+# $NET1 Configuration
+if [[ "$ALL_NET" =~ $NET1 ]]
+then
+	NET1_IP=$(ip addr show "$NET1" | grep 'inet ' | column -txs "/" | cut -d " " -f6)
+	NET1_NET=$(netstat -rn | grep "$NET1" | egrep -v "UG" | column -txs " " | cut -d " " -f1)
+	NET1_MASK=$(netstat -rn | grep "$NET1" | egrep -v "UG" | column -txs " " | cut -d " " -f5)
+	NET1_BCAST=$(ip addr show "$NET1" | grep 'inet ' | column -txs "/" | cut -d " " -f10)
+
+else
+ 	echo -e "$NET1 network adapter or configuration not found. Check your networking settings."
+exit 0
+fi
+# $NET2Configuration
+if [[ "$ALL_NET" =~ $NET2 ]]
+then
+	NET2_IP=$(ip addr show "$NET2" | grep 'inet ' | column -txs "/" | cut -d " " -f6)
+	NET2_NET=$(netstat -rn | grep "$NET2" | egrep -v "UG" | column -txs " " | cut -d " " -f1)
+	NET2_MASK=$(netstat -rn | grep "$NET2" | egrep -v "UG" | column -txs " " | cut -d " " -f5)
+	NET2_BCAST=$(ip addr show "$NET2" | grep 'inet ' | column -txs "/" | cut -d " " -f10)
+
+else
+ 	echo -e "$NET2 network adapter not found."
+fi
+# "$NET3" Configuration
+if [[ "$ALL_NET" =~ $NET3 ]]
+then
+	NET3_IP=$(ip addr show "$NET3" | grep 'inet ' | column -txs "/" | cut -d " " -f6)
+	NET3_NET=$(netstat -rn | grep "$NET3" | egrep -v "UG" | column -txs " " | cut -d " " -f1)
+	NET3_MASK=$(netstat -rn | grep "$NET3" | egrep -v "UG" | column -txs " " | cut -d " " -f5)
+	NET3_BCAST=$(ip addr show "$NET3" | grep 'inet ' | column -txs "/" | cut -d " " -f10)
+
+else
+ 	echo -e "$NET3 network adapter not found."
+fi
+# "$NET4" Configuration
+if [[ "$ALL_NET" =~ $NET4 ]]
+then
+	NET4_IP=$(ip addr show "$NET4" | grep 'inet ' | column -txs "/" | cut -d " " -f6)
+	NET4_NET=$(netstat -rn | grep "$NET4" | egrep -v "UG" | column -txs " " | cut -d " " -f1)
+	NET4_MASK=$(netstat -rn | grep "$NET4" | egrep -v "UG" | column -txs " " | cut -d " " -f5)
+	NET4_BCAST=$(ip addr show "$NET4" | grep 'inet ' | column -txs "/" | cut -d " " -f10)
+
+else
+ 	echo -e "$NET4 network adapter not found."
+fi
+#-----------------------------------------------------------------------------#
+echo -e "Installing Packages..."
+#-----------------------------------------------------------------------------#
+apt-get update &> /dev/null
+apt-get -y dselect-upgrade &> /dev/null
+apt-get -y autoremove &> /dev/null
+#apt-get -y install lamp-server^ &> /dev/null
+apt-get -y install bridge-utils vlan &> /dev/null
+apt-get -y install bind9 dnsutils &> /dev/null
+apt-get -y install isc-dhcp-server &> /dev/null
+apt-get -y install ssh openssh-server &> /dev/null
+apt-get -y install openssl stunnel &> /dev/null
+apt-get -y install ntp ntpdate &> /dev/null
+apt-get -y install apache2 ^squid3 calamaris &> /dev/null
+apt-get -y install dansguardian &> /dev/null
+apt-get -y install iptraf tcpdump tshark traceroute nmap netcat whois ethtool &> /dev/null
+apt-get -y install minicom ipcalc curl lynx arp-scan ifstat ccze &> /dev/null
+apt-get -y install zlib1g zip unzip &> /dev/null
+apt-get -y install libauthen-pam-perl libio-pty-perl libapt-pkg-perl apt-show-versions &> /dev/null
+#-----------------------------------------------------------------------------#
+# Uncomment following line to install Samba with Kerberos
+apt-get -y install krb5-config krb5-user samba samba-common smbclient cifs-utils winbind acl cups-bsd &> /dev/null
+#=============================================================================#
+#	Webmin and Modules
+#-----------------------------------------------------------------------------#
+echo -e "Downloading and installing Webmin, modules and extras..."
+#
+if [[ ! -f ~/webmin.deb ]]
+then
+	wget -q -c "$WEBMIN_DWNLD" -O ~/webmin.deb
+fi
+#
+if [[ ! -f ~/dgwebmin.wbm ]]
+then
+	wget -q -c "$DG_WBM" -O ~/dgwebmin.wbm
+fi
+#
+if [[ ! -f ~/nettools.wbm ]]
+then
+	wget -q -c "$WEBMIN_NETTOOLS" -O ~/nettools.wbm.gz
+	gzip -df ~/nettools.wbm.gz
+fi
+#
+dpkg -i ~/webmin.deb
+apt-get -y -f install
+/usr/share/webmin/install-module.pl ~/dgwebmin.wbm
+/usr/share/webmin/install-module.pl ~/nettools.wbm
+echo -e "no_content_security_policy=1" >> /etc/webmin/config
+#-----------------------------------------------------------------------------#
+echo -e "Configuring BIND module..."
+sed -i 's|stop_cmd=|stop_cmd=service bind9 stop|g' $WEBMIN_BIND
+sed -i 's|start_cmd=|start_cmd=service bind9 start|g' $WEBMIN_BIND
+#
+echo -e "Configuring SysLog module..."
+> $WEBMIN_SYSLOG
+{
+echo -e "restart_cmd=service rsyslog restart"
+echo -e "compressed=1"
+echo -e "m4_path="
+echo -e "start_cmd=service rsyslog start"
+echo -e "syslogd=/usr/sbin/rsyslogd"
+echo -e "lines=20"
+echo -e "pri_all=1"
+echo -e "pipe=1"
+echo -e "syslog_conf=/etc/rsyslog.conf"
+echo -e "others=1"
+echo -e "tags=0"
+echo -e "socket=0"
+echo -e "pid_file=/var/run/rsyslogd.pid"
+echo -e "facilities=auth authpriv cron daemon kern lpr mail mark news syslog user uucp local0 local1 local2 local3 local4 local5 loc$"
+echo -e "m4_conf=0"
+echo -e "signal_cmd=service rsyslog restart"
+echo -e "sync=1"
+echo -e "pri_dir=1"
+echo -e "refresh="
+echo -e "tail_cmd="
+echo -e "extras="
+} >> $WEBMIN_SYSLOG
+#
+echo -e "Configuring Samba Server module..."
+if [ -f /etc/samba/smb.conf ]
+then
+> $WEBMIN_SMB
+{
+echo -e "dont_convert=-499"
+echo -e "list_printers_command=lpc status | grep "[A-z0-9]:" | sed -e 's/://g'"
+echo -e "name_server=/usr/sbin/nmbd"
+echo -e "net=/usr/bin/net"
+echo -e "pdbedit=/usr/bin/pdbedit"
+echo -e "restart_cmd=service nmbd restart && service smbd restart"
+echo -e "run_from_inetd=0"
+echo -e "samba_password_program=/usr/bin/smbpasswd"
+echo -e "samba_server=/usr/sbin/smbd"
+echo -e "samba_status_program=/usr/bin/smbstatus"
+echo -e "smb_conf=/etc/samba/smb.conf"
+echo -e "smbgroupedit=/usr/bin/smbgroupedit"
+echo -e "smb_passwd=/etc/samba/smbpasswd"
+echo -e "sort_mode=0"
+echo -e "start_cmd=service nmbd start && service smbd start"
+echo -e "start_cmd_wb=service winbind start"
+echo -e "stop_cmd=service nmbd stop && service smbd stop"
+echo -e "stop_cmd_wb=service winbind stop"
+echo -e "swat_path="
+echo -e "swat=/usr/sbin/swat"
+echo -e "text_lists=0"
+echo -e "winbind_server=/usr/sbin/winbindd"
+} >> $WEBMIN_SMB
+fi
+#
+echo -e "Configuring DHCP Server module..."
+> $WEBMIN_DHCP
+{
+echo -e "stop_cmd=service isc-dhcp-server stop"
+echo -e "start_cmd=service isc-dhcp-server start"
+echo -e "restart_cmd=service isc-dhcp-server restart"
+echo -e "pid_file=/var/run/dhcp-server/dhcpd.pid"
+echo -e "dhcpd_path=/usr/sbin/dhcpd"
+echo -e "dhcpd_conf=/etc/dhcp/dhcpd.conf"
+echo -e "lease_file=/var/lib/dhcp/dhcpd.leases"
+echo -e "interfaces_type=debian"
+echo -e "dhcpd_nocols=5"
+echo -e "show_mac=0"
+echo -e "show_ip=1"
+echo -e "lease_sort=0"
+echo -e "group_name=0"
+echo -e "lease_tz=0"
+echo -e "desc_name=0"
+echo -e "display_max="
+echo -e "hostnet_list=0"
+} >> $WEBMIN_DHCP
+#
+echo -e "Configuring Dansguardian module..."
+> $WEBMIN_DG
+{
+echo -e "binary_file=/usr/sbin/dansguardian"
+echo -e "pid_file=/var/run/dansguardian.pid"
+echo -e "start_cmd=service dansguardian start"
+echo -e "stop_cmd=service dansguardian stop"
+echo -e "restart_cmd=service dansguardian restart"
+echo -e "autoreload=1"
+echo -e "autorestart=1"
+echo -e "restart_type=1"
+echo -e "log_path=/var/log/dansguardian"
+echo -e "show_fixedlists=0"
+echo -e "conf_dir=/etc/dansguardian"
+echo -e "log_format=followDansGuardian"
+echo -e "messages_path=followDansGuardian" 
+} >> $WEBMIN_DG
+# Squid module settings
+echo -e "Configuring Squid/Squid3 module..."
+> $WEBMIN_SQUID
+{
+echo -e "sort_conf=0"
+echo -e "squidclient=squidclient"
+echo -e "cache_dir=/var/spool/squid3"
+echo -e "sync_create=0"
+echo -e "log_dir=/var/log/squid3"
+echo -e "pid_file=/var/run/squid3.pid"
+echo -e "cal_max=50000"
+echo -e "sync_modify=1"
+echo -e "cal_fmt=w"
+echo -e "cal_all=1"
+echo -e "squid_path=squid3"
+echo -e "calamaris=calamaris"
+echo -e "squid_conf=/etc/squid3/squid.conf"
+echo -e "sync_delete=0"
+echo -e "cal_args=-aw"
+echo -e "cachemgr_path=/usr/lib/cgi-bin/cachemgr3.cgi"
+echo -e "crypt_conf=0"
+echo -e "restart_pos=0"
+echo -e "squid_restart=squid3 -k reconfigure"
+echo -e "squid_start=service squid3 start"
+echo -e "cal_extra="
+echo -e "squid_stop=service dansguardian stop && service squid3 stop"
+} >> $WEBMIN_SQUID
+#
+echo -e "Completed Webmin modules configuration..."
+#=============================================================================#
+echo -e "Backup Configuration Files..."
+#-----------------------------------------------------------------------------#
+cp /etc/squid3/squid.conf{,.original}
+cp /etc/dhcp/dhcpd.conf{,.original}
+cp /etc/dansguardian/dansguardian.conf{,.original}
+cp /etc/dansguardian/dansguardianf1.conf{,.original}
+#cp /etc/resolv.conf{,.original}
+#=============================================================================#
+echo -e "Configuring BIND DNS Forwarders..."
+#-----------------------------------------------------------------------------#
+#> /etc/resolv.conf
+#echo -e "nameserver 127.0.0.1" >> /etc/resolv.conf
+sed -i '14d' $BIND_CONF
+sed -i 's|// }|}|g' $BIND_CONF
+sed -i 's|// forwarders|forwarders|g' $BIND_CONF
+#
+sed -i '13 a\\t208.67.222.220; # OpenDNS' $BIND_CONF
+sed -i '13 a\\t208.67.220.222; # OpenDNS' $BIND_CONF
+#
+sed -i '13 a\\t208.67.222.123; # OpenDNS Family Shield' $BIND_CONF
+sed -i '13 a\\t208.67.220.123; # OpenDNS Family Shield' $BIND_CONF
+#
+/etc/init.d/bind9 restart &> /dev/null
+#=============================================================================#
+echo -e "Configuring DHCP3 Server settings..."
+#-----------------------------------------------------------------------------#
+NET1_NETMASK=$(echo -e "$NET1_NET/$NET1_MASK")
+NET1_HOSTMIN=$(ipcalc "$NET1_NETMASK" | grep HostMin | cut -d " " -f4)
+NET1_HOSTMAX=$(ipcalc "$NET1_NETMASK" | grep HostMax | cut -d " " -f4)
+NET1_CIDR=$(ipcalc "$NET1_NETMASK" | grep Network | cut -d " " -f4)
+NET1_CIDR=$(ip addr show "$NET1" | grep "inet " | cut -d " " -f6)
+NET2_NETMASK=$(echo -e "$NET2_NET/$NET2_MASK")
+NET2_HOSTMIN=$(ipcalc "$NET2_NETMASK" | grep HostMin | cut -d " " -f4)
+NET2_HOSTMAX=$(ipcalc "$NET2_NETMASK" | grep HostMax | cut -d " " -f4)
+NET2_CIDR=$(ipcalc "$NET2_NETMASK" | grep Network | cut -d " " -f4)
+NET3_NETMASK=$(echo -e "$NET3_NET/$NET3_MASK")
+NET3_HOSTMIN=$(ipcalc "$NET3_NETMASK" | grep HostMin | cut -d " " -f4)
+NET3_HOSTMAX=$(ipcalc "$NET3_NETMASK" | grep HostMax | cut -d " " -f4)
+NET3_CIDR=$(ipcalc "$NET3_NETMASK" | grep Network | cut -d " " -f4)
+NET4_NETMASK=$(echo -e "$NET4_NET/$NET4_MASK")
+NET4_HOSTMIN=$(ipcalc "$NET4_NETMASK" | grep HostMin | cut -d " " -f4)
+NET4_HOSTMAX=$(ipcalc "$NET4_NETMASK" | grep HostMax | cut -d " " -f4)
+NET4_CIDR=$(ipcalc "$NET4_NETMASK" | grep Network | cut -d " " -f4)
+#
+> "$DHCP_CONF"
+#
+{
+echo -e "ddns-update-style none;"
+echo -e "default-lease-time 600;"
+echo -e "max-lease-time 7200;"
+echo -e "log-facility local7;"
+echo -e "authoritative;"
+echo -e "\t#option domain-name "'"DOMAIN.LOCAL"'";"
+} >> "$DHCP_CONF"
+#
+echo -e "Configuring DHCP Server Subnets..."
+#
+if [[ "$ALL_NET" =~ $NET1 ]]
+then
+	{
+	echo -e "#Local Network $NET1_NET"
+	echo -e "subnet $NET1_NET netmask $NET1_MASK { "
+	echo -e "\t#option netbios-node-type 8;"
+	echo -e "\t#option netbios-name-servers $NET1_IP;"
+	echo -e "\toption time-servers $NET1_IP;"
+	echo -e "\toption subnet-mask $NET1_MASK;"
+	echo -e "\toption domain-name-servers $NET1_IP;"
+	echo -e "\t#option domain-name "'"DOMAIN.LOCAL"'";"
+	echo -e "\toption broadcast-address $NET1_BCAST;"
+	echo -e "\toption routers $NET1_IP;"
+	echo -e "\trange $NET1_HOSTMIN $NET1_HOSTMAX;"
+	echo -e "\t} "
+	} >> "$DHCP_CONF"
+else
+	echo ;
+fi
+if [[ "$ALL_NET" =~ $NET2 ]]
+then
+	{
+	echo -e "#Local Network $NET2_NET"
+	echo -e "subnet $NET2_NET netmask $NET2_MASK { "
+	echo -e "\t#option netbios-node-type 8;"
+	echo -e "\t#option netbios-name-servers $NET2_IP;"
+	echo -e "\toption time-servers $NET2_IP;"
+	echo -e "\toption subnet-mask $NET2_MASK;"
+	echo -e "\toption domain-name-servers $NET2_IP;"
+	echo -e "\t#option domain-name "'"DOMAIN.LOCAL"'";"
+	echo -e "\toption broadcast-address $NET2_BCAST;"
+	echo -e "\toption routers $NET2_IP;"
+	echo -e "\trange $NET2_HOSTMIN $NET2_HOSTMAX;"
+	echo -e "\t} "
+	} >> "$DHCP_CONF"
+else
+	echo ;
+fi
+if [[ "$ALL_NET" =~ $NET3 ]]
+then
+	{
+	echo -e "#Local Network $NET3_NET"
+	echo -e "subnet $NET3_NET netmask $NET3_MASK { "
+	echo -e "\t#option netbios-node-type 8;"
+	echo -e "\t#option netbios-name-servers $NET3_IP;"
+	echo -e "\toption time-servers $NET3_IP;"
+	echo -e "\toption subnet-mask $NET3_MASK;"
+	echo -e "\toption domain-name-servers $NET3_IP;"
+	echo -e "\t#option domain-name "'"DOMAIN.LOCAL"'";"
+	echo -e "\toption broadcast-address $NET3_BCAST;"
+	echo -e "\toption routers $NET3_IP;"
+	echo -e "\trange $NET3_HOSTMIN $NET3_HOSTMAX;"
+	echo -e "\t} "
+	} >> "$DHCP_CONF"
+else
+	echo ;
+fi
+if [[ "$ALL_NET" =~ $NET4 ]]
+then
+	{
+	echo -e "#Local Network $NET4_NET"
+	echo -e "subnet $NET4_NET netmask $NET4_MASK { "
+	echo -e "\t#option netbios-node-type 8;"
+	echo -e "\t#option netbios-name-servers $NET4_IP;"
+	echo -e "\toption time-servers $NET4_IP;"
+	echo -e "\toption subnet-mask $NET4_MASK;"
+	echo -e "\toption domain-name-servers $NET4_IP;"
+	echo -e "\t#option domain-name "'"DOMAIN.LOCAL"'";"
+	echo -e "\toption broadcast-address $NET4_BCAST;"
+	echo -e "\toption routers $NET4_IP;"
+	echo -e "\trange $NET4_HOSTMIN $NET4_HOSTMAX;"
+	echo -e "\t} "
+	} >> "$DHCP_CONF"
+else
+	echo ;
+fi
+#
+DHCPD_INT=$(awk '{print $1}' /proc/net/dev | grep ":" | cut -d ":" -f1 | egrep -v "$WAN_INET|lo|tun|tap" | tr '\n' ' ')
+sed -i 's|INTERFACES=|#INTERFACES=|g' /etc/default/isc-dhcp-server
+echo -e "INTERFACES=$DHCPD_INT" >> /etc/default/isc-dhcp-server
+service isc-dhcp-server restart &> /dev/null
+#=============================================================================#
+echo -e "Customizing Squid Proxy server configuration file..."
+#-----------------------------------------------------------------------------#
+# Creates ACL Folder
+mkdir "$SQUID_ACLS" &> /dev/null
+# Creates extended ACLs and files
+touch "$SQUID_ACLS/browser_java.acl"
+touch "$SQUID_ACLS/browser_block.acl"
+touch "$SQUID_ACLS/domains_allow.acl"
+touch "$SQUID_ACLS/domains_antimalware.acl"
+touch "$SQUID_ACLS/domains_block.acl"
+touch "$SQUID_ACLS/domains_update.acl"
+touch "$SQUID_ACLS/domains_webmail.acl"
+touch "$SQUID_ACLS/dst_ip_allow.acl"
+touch "$SQUID_ACLS/dst_ip_block.acl"
+touch "$SQUID_ACLS/src_ip_allow.acl"
+touch "$SQUID_ACLS/src_ip_block.acl"
+touch "$SQUID_ACLS/safe_ports.acl"
+touch "$SQUID_ACLS/ssl_ports.acl"
+touch "$SQUID_ACLS/urls_allow.acl"
+touch "$SQUID_ACLS/urls_block.acl"
+#
+touch "$SQUID_ACLS/domains_office365.acl"
+touch "$SQUID_ACLS/urls_office365.acl"
+touch "$SQUID_ACLS/ip_office365.acl"
+# Cache and Memory settings
+> "$SQUID_CONF"
+{
+echo -e "$DIV_ECHO1"
+echo -e "#\tApplication and System Updates - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e acl domains_update dstdomain '"'$SQUID_ACLS/domains_update.acl'"'
+echo -e acl domains_antimalware dstdomain '"'$SQUID_ACLS/domains_antimalware.acl'"'
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tBrowsers compatibility fix - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e acl browser_java browser '"'$SQUID_ACLS/browser_java.acl'"'
+echo -e acl browser_block browser '"'$SQUID_ACLS/browser_block.acl'"'
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e acl domains_office365 dstdomain '"'$SQUID_ACLS/domains_office365.acl'"'
+echo -e acl ip_office365 dst '"'$SQUID_ACLS/ip_office365.acl'"'
+echo -e acl urls_office365 dstdom_regex -i '"'$SQUID_ACLS/urls_office365.acl'"'
+echo -e "#"
+echo -e acl domains_webmail dstdomain '"'$SQUID_ACLS/domains_webmail.acl'"'
+echo -e "\n"
+echo -e "#"
+echo -e "#\tAllowed Domains, IP addresses and URLs - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e acl domains_allow dstdomain '"'$SQUID_ACLS/domains_allow.acl'"'
+echo -e acl dst_ip_allow dst '"'$SQUID_ACLS/dst_ip_allow.acl'"'
+echo -e acl urls_allow dstdom_regex -i '"'$SQUID_ACLS/urls_allow.acl'"'
+echo -e "#"
+echo -e acl domains_block dstdomain '"'$SQUID_ACLS/domains_block.acl'"'
+echo -e acl dst_ip_block dst '"'$SQUID_ACLS/dst_ip_block.acl'"'
+echo -e acl urls_block dstdom_regex -i '"'$SQUID_ACLS/urls_block.acl'"'
+echo -e "#"
+echo -e acl SSL_ports port '"'$SQUID_ACLS/ssl_ports.acl'"'
+echo -e acl Safe_ports port '"'$SQUID_ACLS/safe_ports.acl'"'
+echo -e "#"
+echo -e "acl CONNECT method CONNECT"
+echo -e "#"
+echo -e "$DIV_ECHO2"
+echo -e "#\tSource (Local) IP/hostnames"
+echo -e "$DIV_ECHO2"
+echo -e acl src_ip_allow src '"'$SQUID_ACLS/src_ip_allow.acl'"'
+echo -e acl src_ip_block src '"'$SQUID_ACLS/src_ip_block.acl'"'
+echo -e "$DIV_ECHO2"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tNTLM / BASIC Proxy Authentication"
+echo -e "$DIV_ECHO2"
+echo -e "# Uncomment the required lines to enable Negotiate/NTLM Authentication"
+echo -e "# with a Windows 200x Active Directory Server."
+echo -e "$DIV_ECHO2"
+echo -e "\n"
+echo -e "#auth_param negotiate program /usr/lib/squid/negotiate_kerberos_auth -d"
+echo -e "#auth_param negotiate children 15"
+echo -e "#auth_param negotiate keep_alive on"
+echo -e "#"
+echo -e "#auth_param ntlm program /usr/bin/ntlm_auth --helper-protocol=squid-2.5-ntlmssp"
+echo -e "#auth_param ntlm children 35"
+echo -e "#auth_param ntlm keep_alive on"
+echo -e "#"
+echo -e "#auth_param basic program /usr/bin/ntlm_auth --helper-protocol=squid-2.5-basic"
+echo -e "#auth_param basic children 35"
+echo -e "#auth_param basic realm DOMAIN"
+echo -e "#auth_param basic credentialsttl 2 hour"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tBASIC Proxy Authentication"
+echo -e "$DIV_ECHO2"
+echo -e "# Uncomment the required lines to enable Basic Proxy Authentication."
+echo -e "$DIV_ECHO2"
+echo -e "\n"
+echo -e "#auth_param basic program /usr/lib/squid3/basic_ncsa_auth /etc/squid3/login"
+echo -e "#auth_param basic children 5"
+echo -e "#auth_param basic realm Proxy Authentication"
+echo -e "#auth_param basic credentialsttl 2 hours"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAuthentication ACL"
+echo -e "$DIV_ECHO2"
+echo -e "# Uncomment 'acl AUTHENTICATION proxy_auth REQUIRED' to enable"
+echo -e "# Proxy Authentication. Remember to uncomment Basic, Negotiate or NTLM Authentication"
+echo -e "# settings."
+echo -e "$DIV_ECHO2"
+echo -e "#acl AUTHENTICATION proxy_auth REQUIRED"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tProxy Restrictions - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e "\n"
+echo -e "#\t --- Local IP address to allow unrestricted access"
+echo -e "http_access allow src_ip_allow"
+echo -e "#\t --- Local IP address to restrict all access"
+echo -e "http_access deny src_ip_block"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#"
+echo -e "http_access allow CONNECT browser_java"
+echo -e "http_access allow browser_java"
+echo -e "#"
+echo -e "http_access allow CONNECT domains_update domains_antimalware"
+echo -e "http_access allow domains_update domains_antimalware"
+echo -e "#"
+echo -e "http_access allow CONNECT domains_allow dst_ip_allow urls_allow"
+echo -e "http_access allow domains_allow dst_ip_allow urls_allow"
+echo -e "#"
+echo -e "http_access allow CONNECT domains_office365 ip_office365 urls_office365"
+echo -e "http_access allow domains_office365 ip_office365 urls_office365"
+echo -e "#"
+echo -e "http_access deny CONNECT domains_block dst_ip_block urls_block"
+echo -e "http_access deny domains_block dst_ip_block urls_block"
+echo -e "\n"
+echo -e "# Uncomment the following to block any other site or IP not included"
+echo -e "# in the allowed ACLS."
+echo -e "$DIV_ECHO2"
+echo -e '#http_access deny CONNECT !domains_allow !dst_ip_allow !urls_allow'
+echo -e '#http_access deny !domains_allow !dst_ip_allow !urls_allow'
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tSquid3 Default Proxy Manager Settings - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e "#"
+echo -e 'http_access deny !Safe_ports'
+echo -e 'http_access deny CONNECT !SSL_ports'
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "# Uncomment 'http_access allow AUTHENTICATION' to enable proxy authentication."
+echo -e "$DIV_ECHO2"
+echo -e "#http_access deny !AUTHENTICATION"
+echo -e "#http_access allow AUTHENTICATION"
+echo -e "\n"
+echo -e "#http_access allow localnet"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tSquid3 Default Proxy Settings - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e "http_access allow localhost manager"
+echo -e "http_access deny manager"
+echo -e "http_access allow localhost"
+echo -e "http_access deny all"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tPort Settings"
+echo -e "$DIV_ECHO1"
+echo -e "# Add '"'intercept'"' after '"'http_port 3128'"' to enable Transparent Proxy"
+echo -e "$DIV_ECHO2"
+echo -e "http_port 3128"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "### SSL BUMP - EXPERIMENTAL ###"
+echo -e "#http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB cert=/usr/local/squid/ssl_cert/myCA.pem"
+echo -e "#always_direct allow all"
+echo -e "#ssl_bump allow all"
+echo -e "## sslproxy_cert_error allow all"
+echo -e "## sslproxy_flags DONT_VERIFY_PEER"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tCache and Memory Settings - BE CAREFUL WHEN CHANGING SETTINGS"
+echo -e "$DIV_ECHO1"
+echo -e "cache_dir ufs /var/spool/squid3 100 16 256"
+echo -e "#cache_dir ufs /var/spool/squid3 16384 16 256"
+echo -e "#maximum_object_size 700 MB"
+echo -e "cache_mem 8 MB"
+echo -e "\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Comment the following settings if slow browsing is experienced."
+echo -e "# These are needed uncommented for Windows Update."
+echo -e "$DIV_ECHO2" 
+echo -e "#range_offset_limit -1"
+echo -e "#quick_abort_min -1"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tRefresh Patterns - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e "refresh_pattern ^ftp:\t1440\t20%\t10080"
+echo -e "refresh_pattern ^gopher:\t1440\t0%\t1440"
+echo -e "refresh_pattern -i (cgi-bin|\?)\t0\t0%\t0"
+echo -e "refresh_pattern (Release|Packages(.gz)*)$\t0\t20%\t2880"
+echo -e "refresh_pattern .\t0\t20%\t4320"
+echo -e "refresh_pattern -i \.(gif|png|jpg|jpeg|ico)$\t3600\t90%\t43200"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tDNS Name Servers"
+echo -e "$DIV_ECHO2"
+echo -e "# Uncomment only the desired DNS servers."
+echo -e "# If you are combining Dansguardian with OpenDNS and need to allow unrestricted"
+echo -e "# users or devices to bypass OpenDNS, use the default option."
+echo -e "#"
+echo -e "# 8.8.8.8, 8.8.4.4 - Google DNS (Not filtered)"
+echo -e "# 208.67.222.222, 208.67.220.220 - OpenDNS"
+echo -e "# 208.67.222.123, 208.67.220.123 - OpenDNS FamilyShield"
+echo -e "$DIV_ECHO2"
+echo -e "#dns_nameservers 8.8.8.8 8.8.4.4"
+echo -e "#dns_nameservers 208.67.222.222 208.67.220.220"
+echo -e "#dns_nameservers 208.67.222.123 208.67.220.123"
+echo -e "\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tOther Settings - DO NOT CHANGE"
+echo -e "$DIV_ECHO1"
+echo -e "coredump_dir /var/spool/squid3"
+echo -e "visible_hostname localhost"
+echo -e "access_log /var/log/squid3/access.log squid"
+echo -e "error_directory /usr/share/squid3/errors/templates/"
+echo -e "cache_effective_user proxy"
+echo -e "cache_effective_group proxy"
+echo -e "\n"
+} >> "$SQUID_CONF"
+#-----------------------------------------------------------------------------#
+# Adding entries to External ACLs
+#-----------------------------------------------------------------------------#
+{
+echo -e ".edu"
+echo -e ".gov"
+echo -e ".mil"
+echo -e ".verisign.com"
+echo -e ".digitalriver.com"
+} >> "$SQUID_ACLS/domains_allow.acl"
+#
+{
+echo -e ".alwil.com"
+echo -e ".antivirus.com"
+echo -e ".avast.com"
+echo -e ".avg.com"
+echo -e ".avira.com"
+echo -e ".bitdefender.com"
+echo -e ".bleepingcomputer.com"
+echo -e ".ca.com"
+echo -e ".cloudantivirus.com"
+echo -e ".eset.com"
+echo -e ".free-av.com"
+echo -e ".freeavg.com"
+echo -e ".grisoft.com"
+echo -e ".grisoft.cz"
+echo -e ".kaspersky.com"
+echo -e ".lavasoft.com"
+echo -e ".malwarebytes.org"
+echo -e ".mcafeeasap.com"
+echo -e ".mcafee.com"
+echo -e ".nai.com"
+echo -e ".norman.com"
+echo -e ".norton.com"
+echo -e ".pandasecurity.com"
+echo -e ".safer-networking.org"
+echo -e ".superantispyware.com"
+echo -e ".symantec.com"
+echo -e ".symantecliveupdate.com"
+echo -e ".sysinternals.com"
+echo -e ".trendmicro.com"
+echo -e ".trendsecure.com"
+echo -e ".virusbtn.com"
+} >> "$SQUID_ACLS/domains_antimalware.acl"
+#
+{
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep -e '.com$' | egrep -v "http" | sed 's/^*.//' | sed 's/^/./'
+} >> "$SQUID_ACLS/domains_office365.acl"
+#
+{
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep '^http' | sed 's/^http/'^'http/'
+} >> "$SQUID_ACLS/urls_office365.acl"
+#
+{
+touch /tmp/office365.ip
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep -E '([0-9]{1,3}\.){3}' | egrep -v "<|=|>" | grep -v ":"  >> /tmp/office365.ip
+#
+curl -s "http://technet.microsoft.com/en-us/library/hh373144.aspx" | grep -E '([0-9]{1,3}\.){3}' | egrep -v "<|=|>" | grep -v ":"  >> /tmp/office365.ip
+curl -s "http://technet.microsoft.com/library/dn163583%28v=exchg.150%29.aspx" | grep -E '([0-9]{1,3}\.){3}' | egrep -v "<|=|>" | grep -v ":"  >> /tmp/office365.ip
+cat /tmp/office365.ip | sort -k1,1n | uniq -u  > "/etc/squid3/acls/ip_office365.acl"
+egrep -v "/" /etc/squid3/acls/ip_office365.acl | while read line; do sed -i 's|'$line'|'$line/32'|g' /etc/squid3/acls/ip_office365.acl; done
+rm /tmp/office365.ip
+}
+#
+{
+echo -e ".acer.com"
+echo -e ".adobe.com"
+echo -e ".akamai.com"
+echo -e ".akamaihd.com"
+echo -e ".amd.com"
+echo -e ".apple.com"
+echo -e ".asrock.com"
+echo -e ".asus.com"
+echo -e ".canon.com"
+echo -e ".centos.org"
+echo -e ".cisco.com"
+echo -e ".citrix.com"
+echo -e ".compaq.com"
+echo -e ".debian.org"
+echo -e ".dell.com"
+echo -e ".dl.google.com"
+echo -e ".dl-ssl.google.com"
+echo -e ".famillecollet.com"
+echo -e ".fedoraproject.org"
+echo -e ".freebsd.org"
+echo -e ".getfirefox.com"
+echo -e ".go-mono.com"
+echo -e ".hp.com"
+echo -e ".ibm.com"
+echo -e ".intel.com"
+echo -e ".java.com"
+echo -e ".lenovo.com"
+echo -e ".lexmark.com"
+echo -e ".logitec.com"
+echo -e ".microsoft.com"
+echo -e ".microsoft.net"
+echo -e ".mono-project.com"
+echo -e ".mozilla.com"
+echo -e ".mozilla.net"
+echo -e ".mozilla.org"
+echo -e ".msdnevents.com"
+echo -e ".msftncsi.com"
+echo -e ".msft.net"
+echo -e ".novell.com"
+echo -e ".nvidia.com"
+echo -e ".openbsd.org"
+echo -e ".opensuse.org"
+echo -e ".opera.com"
+echo -e ".oracle.com"
+echo -e ".pack.google.com"
+echo -e ".real.com"
+echo -e ".redhat.com"
+echo -e ".ricoh.com"
+echo -e ".ricoh.co.uk"
+echo -e ".ricoh-support.com"
+echo -e ".ricoh-usa.com"
+echo -e ".sharp.com.sg"
+echo -e ".sharpsma.com"
+echo -e ".sharpusa.com"
+echo -e ".sharp-world.com"
+echo -e ".sis.com"
+echo -e ".sourceforge.net"
+echo -e ".sun.com"
+echo -e ".tools.google.com"
+echo -e ".toshiba.co.jp"
+echo -e ".toshiba.com"
+echo -e ".ubuntu.com"
+echo -e ".ubnt.com"
+echo -e ".viaarena.com"
+echo -e ".via.com.tw"
+echo -e ".windows.com"
+echo -e ".windowsupdate.com"
+echo -e ".xerox.com"
+} >> "$SQUID_ACLS/domains_update.acl"
+#
+{
+echo -e ".address.yahoo.com"
+echo -e ".edit.yahoo.com"
+echo -e ".ggl.yahoo.com"
+echo -e ".gmail.com"
+echo -e ".gmail.google.com"
+echo -e ".help.yahoo.com"
+echo -e ".hotmail.com"
+echo -e ".l1.yimg.com"
+echo -e ".live.com"
+echo -e ".login.live.com"
+echo -e ".login.yahoo.com"
+echo -e ".lrd.yahoo.com"
+echo -e ".l.yimg.com"
+echo -e ".mail.google.com"
+echo -e ".mail.live.com"
+echo -e ".mail.yahoo.com"
+echo -e ".mail.yahoo.net"
+echo -e ".mail.yimg.com"
+echo -e ".my.yahoo.com"
+echo -e ".news.yahoo.com"
+echo -e ".outlook.com"
+echo -e ".pulse.yahoo.com"
+echo -e ".screenname.aol.com"
+echo -e ".s.yimg.com"
+echo -e ".toolbar.yahoo.com"
+echo -e ".updates.yahoo.com"
+echo -e ".wlxrs.com"
+} >> "$SQUID_ACLS/domains_webmail.acl"
+#
+{
+echo -e "Java 1.6"
+} >> "$SQUID_ACLS/browser_java.acl"
+#
+{
+echo -e "^Attentio"
+echo -e "^bot"
+echo -e "(.*?)Firefox/0"
+echo -e "(.*?)Firefox/1.0"
+echo -e "(.*?)Firefox/2.0"
+echo -e "^Gator"
+echo -e "^gator"
+echo -e "^heretrix"
+echo -e "^HouxouCrawler"
+echo -e "^ichiro"
+echo -e "^ISC"
+echo -e "^jakarta"
+echo -e "^Jakarta"
+echo -e "^Java"
+echo -e "^Larbin"
+echo -e "^larbin"
+echo -e "^libwww"
+echo -e "^Libwww"
+echo -e "^LibWWW"
+echo -e "^MJ12bot"
+echo -e "^MLBot"
+echo -e "^Mozilla/1\."
+echo -e "^Mozilla/3\."
+echo -e "^Mozilla/4\."
+echo -e "^Mp3Bot"
+echo -e "(.*?)MSIE 3"
+echo -e "(.*?)MSIE 4"
+echo -e "(.*?)MSIE 5"
+echo -e "(.*?)MSIE 6"
+echo -e "(.*?)MSIE/6\."
+echo -e "^NameOfAgent"
+echo -e "Netscape"
+echo -e "^Nutch"
+echo -e "^Opera/5\."
+echo -e "^Opera/6\."
+echo -e "^Opera/7\."
+echo -e "^Python"
+echo -e "^shelob"
+echo -e "^Speedy"
+echo -e "^TrackBack"
+echo -e "^trackback"
+echo -e "^User"
+echo -e "^user"
+echo -e "^WebAlta"
+echo -e "^WWW-Mechanize"
+echo -e "^yacybot"
+} >> "$SQUID_ACLS/browser_block.acl"
+#
+{
+echo -e "^http://www.google.com/enterprise"
+echo -e "^https://www.google.com/chrome"
+echo -e "^http://www.apple.com/safari"
+echo -e "^http://www.apple.com/itunes"
+echo -e "^http://www.apple.com/support"
+} >> "$SQUID_ACLS/urls_allow.acl"
+#
+echo -e "21\n70\n80\n443\n10000\n10443" >> "$SQUID_ACLS/safe_ports.acl"
+#
+echo -e "443\n10000\n10443" >> "$SQUID_ACLS/ssl_ports.acl"
+#
+#=============================================================================#
+echo	"Dansguardian Multiple Filter Groups Configuration..."
+#-----------------------------------------------------------------------------#
+#	Backup default Dansguardian configuration files
+#-----------------------------------------------------------------------------#
+cp "$DG_CONF" "$DG_CONF.original"
+cp "$DG_F1" "$DG_F1.original"
+for DGLIST in /etc/dansguardian/lists/*list; do cp "$DGLIST" "$DGLIST.original"; done
+# Configuring dansguardian.conf
+#-----------------------------------------------------------------------------#
+sed -i "s|#authplugin = '/etc/dansguardian/authplugins/ip.conf'|authplugin = '/etc/dansguardian/authplugins/ip.conf'|" "$DG_CONF"
+sed -i "s|UNCONFIGURED|# UNCONFIGURED|" "$DG_CONF"
+sed -i "s|filtergroups = 1|filtergroups = 4|" "$DG_CONF"
+sed -i "s|reverseaddresslookups = off|reverseaddresslookups = on|" "$DG_CONF"
+sed -i "s|recheckreplacedurls = off|recheckreplacedurls = on|" "$DG_CONF"
+# Configuring dansguardianf1.conf
+#-----------------------------------------------------------------------------#
+sed -i "s|enablepics = off|enablepics = on|" "$DG_F1"
+sed -i "s|deepurlanalysis = off|deepurlanalysis = on|" "$DG_F1"
+sed -i "s|naughtynesslimit = 50|naughtynesslimit = 300|" "$DG_F1"
+# Copies Dansguardian Filter Groups configuration files
+#-----------------------------------------------------------------------------#
+sed -i "s|/lists/|/lists/filter1/|" "$DG_F1"
+for s in $(seq 2 6); do cp "$DG_F1" /etc/dansguardian/dansguardianf"$s".conf; done
+sed -i "s|filter1|filter2|" "$DG_F2"
+sed -i "s|filter1|filter3|" "$DG_F3"
+sed -i "s|filter1|filter4|" "$DG_F4"
+sed -i "s|filter1|filter5|" "$DG_F5"
+sed -i "s|filter1|filter6|" "$DG_F6"
+#
+# Assing Server IP Address to Template
+#-----------------------------------------------------------------------------#
+#sed -i "s|localhost|'$WAN_IP'|" /etc/dansguardian/languages/ukenglish/template.html
+#
+#==============================================================================#
+echo	"Setting up Dansguardian IP Filtering group settings..."
+#------------------------------------------------------------------------------#
+# Change default lists location to contents on each filter directory and group name identification
+#-----------------------------------------------------------------------------#
+if [[ "$ALL_NET" =~ $NET1 ]]
+then
+	sed -i "s|#groupname = ''|groupname = 'Network $NET1_CIDR'|" "$DG_F1"
+else
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 1'|" "$DG_F1"
+fi
+if [[ "$ALL_NET" =~ $NET2 ]]
+then
+	sed -i "s|#groupname = ''|groupname = 'Network $NET2_CIDR'|" "$DG_F2"
+else
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 2'|" "$DG_F2"
+fi
+if [[ "$ALL_NET" =~ $NET3 ]]
+then
+	sed -i "s|#groupname = ''|groupname = 'Network $NET3_CIDR'|" "$DG_F3"
+else
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 3'|" "$DG_F3"
+fi
+if [[ "$ALL_NET" =~ $NET4 ]]
+then
+	sed -i "s|#groupname = ''|groupname = 'Network $NET4_CIDR'|" "$DG_F4"
+else
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 4 - Unrestricted'|" "$DG_F4"
+	sed -i "s|groupmode = 1|groupmode = 2|" "$DG_F4"
+fi
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 5'|" "$DG_F5"
+	sed -i "s|#groupname = ''|groupname = 'Filter Group 6'|" "$DG_F6"
+#==============================================================================#
+echo -e "Customizing Dansguardian Phrase, Regular Expressions and Weighted Filtering settings..."
+#------------------------------------------------------------------------------#
+# Changing bannedphraselist
+#-----------------------------------------------------------------------------#
+sed -i 's|rta/banned_portuguese|rta/banned|g' "$BP_LIST"
+sed -i 's|##.Include|#.Include|g' "$BP_LIST"
+sed -i 's|#.Include|.Include|g' "$BP_LIST"
+sed -i 's|#.Include|.Include|g' "$EP_LIST"
+#-----------------------------------------------------------------------------#
+# Changing weightedphraselist
+#-----------------------------------------------------------------------------#
+sed -i 's|#'${INCLUDE_PL}/badwords'|'${INCLUDE_PL}/badwords'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/conspiracy'|'${INCLUDE_PL}/conspiracy'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/domainsforsale'|'${INCLUDE_PL}/domainsforsale'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/drugadvocacy'|'${INCLUDE_PL}/drugadvocacy'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/forums'|'${INCLUDE_PL}/forums'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/gambling'|'${INCLUDE_PL}/gambling'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/games'|'${INCLUDE_PL}/games'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/goodphrases'|'${INCLUDE_PL}/goodphrases'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/gore'|'${INCLUDE_PL}/gore'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/idtheft'|'${INCLUDE_PL}/idtheft'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/illegaldrugs'|'${INCLUDE_PL}/illegaldrugs'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/intolerance'|'${INCLUDE_PL}/intolerance'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/legaldrugs'|'${INCLUDE_PL}/legaldrugs'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/malware'|'${INCLUDE_PL}/malware'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/music'|'${INCLUDE_PL}/music'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/news'|'${INCLUDE_PL}/news'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/nudism'|'${INCLUDE_PL}/nudism'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/peer2peer'|'${INCLUDE_PL}/peer2peer'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/personals'|'${INCLUDE_PL}/personals'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/pornography'|'${INCLUDE_PL}/pornography'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/proxies'|'${INCLUDE_PL}/proxies'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/secretsocieties'|'${INCLUDE_PL}/secretsocieties'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/sport'|'${INCLUDE_PL}/sport'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/translation'|'${INCLUDE_PL}/translation'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/travel'|'${INCLUDE_PL}/travel'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/upstreamfilter'|'${INCLUDE_PL}/upstreamfilter'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/violence'|'${INCLUDE_PL}/violence'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/warezhacking'|'${INCLUDE_PL}/warezhacking'|g' "$WP_LIST"
+sed -i 's|#'${INCLUDE_PL}/webmail'|'${INCLUDE_PL}/webmail'|g' "$WP_LIST"
+#-----------------------------------------------------------------------------#
+# Changing bannedextensionlist
+#-----------------------------------------------------------------------------#
+> "$BX_LIST"
+#-----------------------------------------------------------------------------#
+# Changing urlregexplist
+#-----------------------------------------------------------------------------#
+sed -i 's|#"(|"(|g' "$URXP_LIST"
+#-----------------------------------------------------------------------------#
+# Changing bannedregexpurllist
+#-----------------------------------------------------------------------------#
+sed -i 's|#(naturism|(naturism|g' "$BRXP_LIST"
+sed -i 's|#(^|(^|g' "$BRXP_LIST"
+sed -i 's|#(free|(free|g' "$BRXP_LIST"
+sed -i 's|#(meet|(meet|g' "$BRXP_LIST"
+sed -i 's|#(marr|(marr|g' "$BRXP_LIST"
+#
+{
+echo -e "\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Paintball and Gotcha guns"
+echo -e "$DIV_ECHO2"
+echo -e "(paintball|gotcha)"
+echo -e "\n"
+} >> "$BRXP_LIST"
+#-----------------------------------------------------------------------------#
+# Changing exceptionregexpurllist
+#-----------------------------------------------------------------------------#
+{
+echo -e "$DIV_ECHO1"
+echo -e "#\tException Regular Expresson URL List"
+echo -e "$DIV_ECHO1"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing ANAL"
+echo -e "$DIV_ECHO2"
+echo -e "(acanalad(a|o(r)|ura)|acanalla(d(a|o)|r)|a(d|g)uanal|amanal|analci(me(s)|te(s))|analect(a(s)|s)|anal(e|é)ptic(a|o)|analemma(s|t(a|ic))|analeptic(s)|analfabet(a|ismo|o)|analg(e|é)sic(a|o)|analgesi(a(s)|c(s))|analgetic(s)|analgia(s)|anal(i|í)stic(a|o)|anal(i|í)tic(a(mente)|o)|analista|analit(ies|y(cs))|analiza(ble|dor(a)|r)|anally|analog(i|í)a|analog|analog(ic(al(ly))|ies|ist(s)|iz(e(d|s)|ing))|analogous(ly|ness(es))|analog(s|ue(s)|y)|anal(o|ó)gicamente|anal(o|ó)gic(a|o)|analphabet(ic(s)|ism(s)|s)|analysand((s)|se(d|r(s)|s)|si(ng|s)|st(s))|analytic(al(ly)|it(ies|y)|s)|analyzab(ilit(ies|y)|le)|analyzation(s)|analyze(d|r(s)|s)|analyzing|apanalad(a|o)|arrayanal|artesanal|artisanal|atarazanal|avellanal|azafranal|bacanal|bacchanal(ia(n(s)|s)|s)|banal|banal(i(dad|t(ies|y))|iz(e(d|s)|ing)ly)|bananal|bisemanal|canalad(a|o(r)|ura)|canale(d|ja|ra)|canalet(a|eo)|canali(cul(ar|i|us))|canaliega|canal(i|í)|canali(ng|se(d|s)|sing|zable|zaci(o|ó)n|z(a|o)|za(r|tion(s))|ze(d|s)|zing)|canall(a(da)|e(d|r(s))|esc(a|o)|ing)|canal(o|ó)n|canal(s)|caranganal|cientanal|contracanal|cryptanaly(s(es|is)|st(s)|tic(al))|cuartanal|decanal|electroanaly(s(es|is)|tical)|encanal((l)ar|izar|lamiento)|entrecanal|epanalepsis|fanal|fontanal|google-analytics|granalla(r)|hermanal|hontanal|humanal|inanalizable|leganal|manal|manzanal|marranalla|metanalys(es|is)|microanalys(es|is|t(s)|tic(al))|misanalys(es|is)|mundanal(idad)|nonanalytic|overanaly(s(es|is)|tical|z(e(d|s)|ing))|panal|pantanal|pichanal|platanal|postanal|postpsychoanalytic|preanal|psicoanal(i|í)tic(a|o)|psicoanali(sta|zar)|psychoanaly(s(es|is|t(s))|ti(cal(ly))|z(e(d|s)|ing))|rabanal|ranal|reanaly(s(es|is)|z(e(d|s)|ing))|recanaliz(ation(s)|e(d|s)|ing)|remanal|sanalotodo|semanal(mente)|tarazanal|tempranal|tetanal|trisemanal|tympanal|unanalyz(able|ed)|varganal|ventanal)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing ASS"
+echo -e "$DIV_ECHO2"
+echo -e "(admass|admasses|amass|amassed|amasser|amassers|amasses|amassing|amassment|amassments|ambassador|ambassadorial|ambassadors|ambassadorship|ambassadorships|ambassadress|ambassadresses|antiassimilation|antiassimilations|anticlassical|antimacassar|antimacassars|assagai|assagaied|assagaiing|assagais|assai|assail|assailable|assailant|assailants|assailed|assailer|assailers|assailing|assails|assais|assassin|assassinate|assassinated|assassinates|assassinating|assassination|assassinations|assassinator|assassinators|assassins|assault|assaulted|assaulter|assaulters|assaulting|assaultive|assaultively|assaultiveness|assaultivenesses|assaults|assay|assayed|assayer|assayers|assaying|assays|assed|assegai|assegaied|assegaiing|assegais|assemblage|assemblages|assemblagist|assemblagists|assemble|assembled|assembler|assemblers|assembles|assemblies|assembling|assembly|assemblyman|assemblymen|assemblywoman|assemblywomen|assent|assentation|assentations|assented|assenter|assenters|assenting|assentor|assentors|assents|assert|asserted|assertedly|asserter|asserters|asserting|assertion|assertions|assertive|assertively|assertiveness|assertivenesses|assertor|assertors|asserts|assess|assessable|assessed|assesses|assessing|assessment|assessments|assessor|assessors|asset|assets|asseverate|asseverated|asseverates|asseverating|asseveration|asseverations|asseverative|assiduities|assiduity|assiduous|assiduously|assiduousness|assiduousnesses|assign|assignabilities|assignability|assignable|assignat|assignation|assignations|assignats|assigned|assignee|assignees|assigner|assigners|assigning|assignment|assignments|assignor|assignors|assigns|assimilabilities|assimilability|assimilable|assimilate|assimilated|assimilates|assimilating|assimilation|assimilationism|assimilationisms|assimilationist|assimilationists|assimilations|assimilative|assimilator|assimilators|assimilatory|assist|assistance|assistances|assistant|assistants|assistantship|assistantships|assisted|assister|assisters|assisting|assistor|assistors|assists|assize|assizes|asslike|associate|associated|associates|associateship|associateships|associating|association|associational|associationism|associationisms|associationist|associationistic|associationists|associations|associative|associatively|associativities|associativity|assoil|assoiled|assoiling|assoilment|assoilments|assoils|assonance|assonances|assonant|assonantal|assonants|assort|assortative|assortatively|assorted|assorter|assorters|assorting|assortment|assortments|assorts|assuage|assuaged|assuagement|assuagements|assuages|assuaging|assuasive|assumabilities|assumability|assumable|assumably|assume|assumed|assumer|assumers|assumes|assuming|assumpsit|assumpsits|assumption|assumptions|assumptive|assurance|assurances|assure|assured|assuredly|assuredness|assurednesses|assureds|assurer|assurers|assures|assurgent|assuring|assuror|assurors|asswage|asswaged|asswages|asswaging|audiocassette|audiocassettes|avgasses|babassu|babassus|badass|badassed|badasses|bagass|bagasse|bagasses|bass|basses|basset|basseted|basseting|bassets|bassetted|bassetting|bassi|bassinet|bassinets|bassist|bassists|bassly|bassness|bassnesses|basso|bassoon|bassoonist|bassoonists|bassoons|bassos|basswood|basswoods|bassy|biassed|biasses|biassing|bioassay|bioassayed|bioassaying|bioassays|biogasses|biomass|biomasses|bluegrass|bluegrasses|brass|brassage|brassages|brassard|brassards|brassart|brassarts|brassbound|brassed|brasserie|brasseries|brasses|brassica|brassicas|brassie|brassier|brassiere|brassieres|brassies|brassiest|brassily|brassiness|brassinesses|brassing|brassish|brassy|bromegrass|bromegrasses|bunchgrass|bunchgrasses|camass|camasses|canvass|canvassed|canvasser|canvassers|canvasses|canvassing|carassow|carassows|carcass|carcasses|carnassial|carnassials|cassaba|cassabas|cassata|cassatas|cassava|cassavas|casserole|casseroles|casses|cassette|cassettes|cassia|cassias|cassimere|cassimeres|cassino|cassinos|cassis|cassises|cassiterite|cassiterites|cassock|cassocks|cassoulet|cassoulets|cassowaries|cassowary|chasse|chassed|chasseing|chassepot|chassepots|chasses|chasseur|chasseurs|chassis|class|classed|classer|classers|classes|classic|classical|classicalities|classicality|classically|classicism|classicisms|classicist|classicistic|classicists|classicize|classicized|classicizes|classicizing|classico|classics|classier|classiest|classifiable|classification|classifications|classificatory|classified|classifieds|classifier|classifiers|classifies|classify|classifying|classily|classiness|classinesses|classing|classis|classism|classisms|classist|classists|classless|classlessness|classlessnesses|classmate|classmates|classroom|classrooms|classy|coassist|coassisted|coassisting|coassists|coassume|coassumed|coassumes|coassuming|compass|compassable|compassed|compasses|compassing|compassion|compassionate|compassionated|compassionately|compassionateness|compassionatenesses|compassionates|compassionating|compassionless|compassions|contrabass|contrabasses|contrabassist|contrabassists|contrabassoon|contrabassoons|cordgrass|cordgrasses|counterassault|counterassaults|crabgrass|crabgrasses|crass|crasser|crassest|crassitude|crassitudes|crassly|crassness|crassnesses|crevasse|crevassed|crevasses|crevassing|cuirass|cuirassed|cuirasses|cuirassier|cuirassiers|cuirassing|curassow|curassows|cutgrass|cutgrasses|cutlass|cutlasses|dassie|dassies|declass|declasse|declassed|declasses|declassification|declassifications|declassified|declassifies|declassify|declassifying|declassing|degassed|degasser|degassers|degasses|degassing|demitasse|demitasses|detassel|detasseled|detasseling|detasselled|detasselling|detassels|disassemble|disassembled|disassembles|disassemblies|disassembling|disassembly|disassociate|disassociated|disassociates|disassociating|disassociation|disassociations|disembarrass|disembarrassed|disembarrasses|disembarrassing|dispassion|dispassionate|dispassionately|dispassionateness|dispassionatenesses|dispassions|eelgrass|eelgrasses|embarrass|embarrassable|embarrassed|embarrassedly|embarrasses|embarrassing|embarrassingly|embarrassment|embarrassments|embassage|embassages|embassies|embassy|encompass|encompassed|encompasses|encompassing|encompassment|encompassments|eyeglass|eyeglasses|fiberglass|fiberglassed|fiberglasses|fiberglassing|fibreglass|fibreglasses|forepassed|frass|frasses|fricassee|fricasseed|fricasseeing|fricassees|galleass|galleasses|galliass|galliasses|gallowglass|gallowglasses|gassed|gasser|gassers|gasses|gassier|gassiest|gassily|gassiness|gassinesses|gassing|gassings|gassy|glass|glassblower|glassblowers|glassblowing|glassblowings|glassed|glasses|glassful|glassfuls|glasshouse|glasshouses|glassie|glassier|glassies|glassiest|glassily|glassine|glassines|glassiness|glassinesses|glassing|glassless|glassmaker|glassmakers|glassmaking|glassmakings|glassman|glassmen|glasspaper|glasspapered|glasspapering|glasspapers|glassware|glasswares|glasswork|glassworker|glassworkers|glassworks|glasswort|glassworts|glassy|goosegrass|goosegrasses|grass|grassed|grasses|grasshopper|grasshoppers|grassier|grassiest|grassily|grassing|grassland|grasslands|grassless|grasslike|grassroot|grassroots|grassy|groundmass|groundmasses|gyrocompass|gyrocompasses|harass|harassed|harasser|harassers|harasses|harassing|harassment|harassments|hardinggrass|hardinggrasses|hassel|hassels|hassium|hassiums|hassle|hassled|hassles|hassling|hassock|hassocks|hourglass|hourglasses|immunoassay|immunoassayable|immunoassays|impassabilities|impassability|impassable|impassableness|impassablenesses|impassably|impasse|impasses|impassibilities|impassibility|impassible|impassibly|impassion|impassioned|impassioning|impassions|impassive|impassively|impassiveness|impassivenesses|impassivities|impassivity|interassociation|interassociations|interclass|isinglass|isinglasses|jackass|jackasseries|jackassery|jackasses|jassid|jassids|jiveass|johnsongrass|johnsongrasses|kavass|kavasses|knotgrass|knotgrasses|kolbassi|kolbassis|kvass|kvasses|landmass|landmasses|lass|lasses|lassie|lassies|lassitude|lassitudes|lasso|lassoed|lassoer|lassoers|lassoes|lassoing|lassos|lemongrass|lemongrasses|lowerclassman|lowerclassmen|mass|massa|massacre|massacred|massacrer|massacrers|massacres|massacring|massage|massaged|massager|massagers|massages|massaging|massas|massasauga|massasaugas|masscult|masscults|masse|massed|massedly|masses|masseter|masseteric|masseters|masseur|masseurs|masseuse|masseuses|massicot|massicots|massier|massiest|massif|massifs|massing|massive|massively|massiveness|massivenesses|massless|massy|matrass|matrasses|mattrass|mattrasses|megass|megasse|megasses|microcassette|microcassettes|misassay|misassayed|misassaying|misassays|misassemble|misassembled|misassembles|misassembling|misassumption|misassumptions|misbiassed|misbiasses|misbiassing|misclass|misclassed|misclasses|misclassification|misclassifications|misclassified|misclassifies|misclassify|misclassifying|misclassing|molasses|molasseses|morass|morasses|morassy|neoclassic|neoclassical|neoclassicism|neoclassicisms|neoclassicist|neoclassicists|nonassertive|nonassociated|nonclass|nonclasses|nonclassical|nonclassified|nonclassroom|nonclassrooms|nonpasserine|nonpassive|nutgrass|nutgrasses|oquassa|oquassas|outclass|outclassed|outclasses|outclassing|outgassed|outgasses|outgassing|outpass|outpassed|outpasses|outpassing|overassert|overasserted|overasserting|overassertion|overassertions|overassertive|overasserts|overassessment|overassessments|overclassification|overclassified|overclassifies|overclassify|overclassifying|overpass|overpassed|overpasses|overpassing|palliasse|palliasses|pass|passable|passably|passacaglia|passacaglias|passade|passades|passado|passadoes|passados|passage|passaged|passages|passageway|passageways|passagework|passageworks|passaging|passant|passband|passbands|passbook|passbooks|passe|passed|passee|passel|passels|passementerie|passementeries|passenger|passengers|passer|passerby|passerine|passerines|passers|passersby|passes|passible|passim|passing|passings|passion|passional|passionate|passionately|passionateness|passionatenesses|passionflower|passionflowers|passionless|passions|passivate|passivated|passivates|passivating|passivation|passivations|passive|passively|passiveness|passivenesses|passives|passivism|passivisms|passivist|passivists|passivities|passivity|passkey|passkeys|passless|passover|passovers|passport|passports|passus|passuses|password|passwords|peppergrass|peppergrasses|piassaba|piassabas|piassava|piassavas|pingrass|pingrasses|plateglass|postclassic|postclassical|potassic|potassium|potassiums|preassembled|preassign|preassigned|preassigning|preassigns|pseudoclassic|pseudoclassicism|pseudoclassicisms|pseudoclassics|quass|quasses|quassia|quassias|quassin|quassins|radioimmunoassay|radioimmunoassays|rassle|rassled|rassles|rassling|raygrass|raygrasses|reassail|reassailed|reassailing|reassails|reassemblage|reassemblages|reassemble|reassembled|reassembles|reassemblies|reassembling|reassembly|reassert|reasserted|reasserting|reassertion|reassertions|reasserts|reassess|reassessed|reassesses|reassessing|reassessment|reassessments|reassign|reassigned|reassigning|reassignment|reassignments|reassigns|reassort|reassorted|reassorting|reassorts|reassume|reassumed|reassumes|reassuming|reassumption|reassumptions|reassurance|reassurances|reassure|reassured|reassures|reassuring|reassuringly|reclassification|reclassifications|reclassified|reclassifies|reclassify|reclassifying|repass|repassage|repassages|repassed|repasses|repassing|ribgrass|ribgrasses|rubasse|rubasses|ryegrass|ryegrasses|sandglass|sandglasses|sargasso|sargassos|sargassum|sargassums|sass|sassabies|sassaby|sassafras|sassafrases|sassed|sasses|sassier|sassies|sassiest|sassily|sassing|sasswood|sasswoods|sassy|semiclassic|semiclassical|semiclassics|smartass|smartasses|spyglass|spyglasses|strass|strasses|subassemblies|subassembly|subbass|subbasses|subclass|subclassed|subclasses|subclassification|subclassifications|subclassified|subclassifies|subclassify|subclassifying|subclassing|subvassal|subvassals|sunglass|sunglasses|superclass|superclasses|supermassive|surpass|surpassable|surpassed|surpasses|surpassing|surpassingly|switchgrass|switchgrasses|syngasses|tass|tasse|tassel|tasseled|tasseling|tasselled|tasselling|tassels|tasses|tasset|tassets|tassie|tassies|teargassed|teargasses|teargassing|thalassaemia|thalassaemias|thalassemia|thalassemias|thalassemic|thalassemics|thalassic|thalassocracies|thalassocracy|thalassocrat|thalassocrats|thoroughbass|thoroughbasses|trass|trasses|trespass|trespassed|trespasser|trespassers|trespasses|trespassing|unassailabilities|unassailability|unassailable|unassailableness|unassailablenesses|unassailably|unassailed|unassembled|unassertive|unassertively|unassigned|unassimilable|unassimilated|unassisted|unassociated|unassuageable|unassuaged|unassuming|unassumingness|unassumingnesses|unclassical|unclassifiable|unclassified|uncompassionate|underclass|underclasses|underclassman|underclassmen|underpass|underpasses|unembarrassed|unimpassioned|unpassable|unsurpassable|unsurpassed|upperclassman|upperclassmen|vassal|vassalage|vassalages|vassals|vavassor|vavassors|videocassette|videocassettes|vinasse|vinasses|wassail|wassailed|wassailer|wassailers|wassailing|wassails|weatherglass|weatherglasses|windlass|windlassed|windlasses|windlassing|wineglass|wineglasses|wiseass|wiseasses|witchgrass|witchgrasses|wrasse|wrasses|wrassle|wrassled|wrassles|wrassling|zebrass|zebrasses)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing BARE"
+echo -e "$DIV_ECHO2"
+echo -e "(abareque|albarejo|albarelo|albareque|barbareria|barbarer(i|í)a|barbaresca|barbaresco|bareback|barebacked|bareboat|bareboats|bared|barefaced|barefacedly|barefacedness|barefacednesses|barefit|barefoot|barefooted|barege|bareges|barehanded|barehead|bareheaded|barely|barelybareness|baremacion|baremo|bareness|barenesses|bareque|barer|bares|baresark|baresarks|barest|cabaret|cabarets|isobare|isobares|subarea|subareas|tabaret|tabarets|threadbare|threadbareness|threadbarenesses)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing BUTT"
+echo -e "$DIV_ECHO2"
+echo -e "(abutt(al(s)|e(d|r(s))|ing)|bellybutton(s)|buttals|butte(d|r|s)|butter(ball(s)|cup(s)|ed|fat(s)|finger(ed|s)|fish(es)|flie(d|s)|fly(er(s)|ing)|ie(r|s(t))|ing|less|milk(s)|nut(s)|s(coth(es))|weed(s)|wort(s)|y)|butti(es|ng|nski(es)|y)|buttock(s)|button(ball(s)|bush(es)|e(d|r(s))|hol(e(d|r(s))|s|ing)|hook(ed|ing|s)|ing|less|s|wood(s)|y)|buttress(e(d|s)|ing)|buttstock(s)|butty|keybutton(s)|misbutton(ed|ing|s)|rebutt(able|al|als|ed|er|ers|ing|on|oned|oning|ons)|scuttlebutt(s)|surrebutter(s)|unbutt(ered|unbutt on(ed|ing|s)))"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing CUM"
+echo -e "$DIV_ECHO2"
+echo -e "(acumen|acuminada|acuminado|acuminosa|acuminoso|acumulable|acumulaci(o|ó)n|acumulador|acumuladora|acumulamiento|acumular|acumulativa|acumulativamente|acumulativo|cacumen|cacuminal|catacumbas|catecumenado|catecumenia|circumcirca|circumincesi(o|ó)n|circumpolar|culcumeque|cuma|cuman(a|o)|cumanagot(a|o)|cuman(e|é)s|cumanesa|cumar(u|ú)|cumba|cumbar(i|í)|cumb(e|é)|cumbearse|cumbia|cumbiamba|cumbo|cumbral|cumbre|cumbrera|cumiche|cum(i|í)nico|cuminol|cumpl|cumpleaños|cumplida|cumplidamente|cumplider(a|o)|cumplido(r(a|es))|cumplimentar|cumplimentera|cumplimentero|cumplimiento|cumplir|cumquibus|cumulaci(o|ó)n|cumulador(a)|cumular|cumulativ(a|o)|cumulativamente|c(u|ú)rcuma|decumbente|descumbrad(a|o)|document|documentaci(o|ó)n|documentad(a|o)|documental|documentalista|documentar|documentaria|documentario|documento|ecum(e|é)nica|ecum(e|é)nico|ecumenismo|encumbrad(a|o)|encumbradamente|encumbramiento|encumbrar|incumbencia|incumbir|incumplida|incumplido|incumplimiento|incumplir|indocumentad(a|o)|l(u|ú)cuma|l(u|ú)cumo|ocume|ocumo|scum(bag)|sucumbir|tucumana|tucumano|vadem(e|é)cum|venim(e|é)cum)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing CUNT"
+echo -e "$DIV_ECHO2"
+echo -e "(acuntir|cuntir)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing CYBER"
+echo -e "$DIV_ECHO2"
+echo -e "(cybercultural|cyberculture|cybernated|cybernation|cybernautic|cybernetic|cybernetical|cybernetically|cybernetician|cyberneticist|cyberneticists|cybernetics)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing DATE"
+echo -e "$DIV_ECHO2"
+echo -e "(acaudate|accommodate|accommodated|accommodates|achordate|airdate|airdates|antedate|antedated|antedates|backdate|backdated|backdates|birthdate|birthdates|candidate|candidates|caudate|caudated|caudates|chordate|chordates|consolidate|consolidated|consolidates|cordate|cordately|cuspidate|cuspidated|date|dateable|datebook|datebooks|dated|datedly|datedness|datednesses|dateless|dateline|datelined|datelines|datelining|dater|daters|dates|denudate|denudated|denudates|depredate|depredated|depredates|dilapidate|dilapidated|dilapidates|ecaudate|elucidate|elucidated|elucidates|emendate|emendated|emendates|exudate|exudates|fecundate|fecundated|fecundates|fluoridate|fluoridated|fluoridates|foredate|foredated|foredates|gradate|gradated|gradates|hemichordate|hemichordates|incudate|intimidate|intimidated|intimidates|inundate|inundated|inundates|invalidate|invalidated|invalidates|iodate|iodated|iodates|lapidate|lapidated|lapidates|liquidate|liquidated|liquidates|mandate|mandated|mandatee|mandates|methylphenidate|methylphenidates|misdate|misdated|misdates|mithridate|mithridates|molybdate|molybdates|noncandidate|noncandidates|nonconsolidated|obcordate|outdate|outdated|outdatedly|outdatedness|outdatednesses|outdates|oxidate|oxidated|oxidates|pedate|pedately|playdate|playdates|postdate|postdated|postdates|predate|predated|predates|reaccommodate|reaccommodated|reaccommodates|reconsolidate|reconsolidated|reconsolidates|redate|redated|redates|reliquidate|reliquidated|reliquidates|retardate|retardates|revalidate|revalidated|revalidates|saltaterandate|sedate|sedated|sedately|sedateness|sedatenesses|sedater|sedates|sedatest|subcordate|subinfeudate|subinfeudated|subinfeudates|transudate|transudates|unaccommodated|unconsolidated|undated|unintimidated|unliquidated|update|updated|updater|updaters|updates|urochordate|urochordates|validate|validated|validates|vanadate|vanadates)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing HARD"
+echo -e "$DIV_ECHO2"
+echo -e "(abuhardillada|abuhardillado|blowhard|blowhards|bohardilla|buharda|buhardilla|caseharden|casehardened|casehardening|casehardens|chard|chards|diehard|diehards|foolhardier|foolhardiest|foolhardily|foolhardiness|foolhardy|hard|harda|hardback|hardbacks|hardball|hardballs|hardboard|hardboiled|hardboots|hardbought|hardbound|hardcase|hardcore|hardcover|hardcovers|harden|hardened|hardener|hardeners|hardening|hardens|harder|hardest|hardhacks|hardhanded|hardhandedness|hardhat|hardhats|hardhead|hardheaded|hardheadedly|hardheadedness|hardheads|hardhearted|hardheartedly|hardheartedness|hardida|hardido|hardier|hardies|hardiest|hardihood|hardily|hardiness|harding|hardinggrass|hardinggrasses|hardly|hardness|hardpan|hardpans|hards|hardset|hardshell|hardship|hardships|hardstand|hardstands|hardtack|hardtacks|hardtop|hardtops|hardware|hardwares|hardwired|hardwood|hardwoods|hardworking|hardy|orchard|orchardist|orchardists|orchardman|orchards|pechardino|pilchard|pilchards|potshard|preharden|prehardened|prehardening|prehardens|reharden|rehardened|rehardening|rehardens|richard|richardson|shard|shards|unhardened)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing HOMO"
+echo -e "$DIV_ECHO2"
+echo -e "(eccehomo|homo|homocentric|homocerca|homoclamidea|homoclamideo|homofobia|homofona|homofonia|homofon(i|í)a|homofono|homogenea|homog(e|é)nea|homogeneamente|homog(e|é)neamente|homogeneidad|homogeneity|homogeneizacion|homogeneizar|homogeneo|homog(e|é)neo|homogeneous|homogeneously|homogeneousness|homogenization|homogenize|homogenized|homogenizer|homogenizers|homogenizes|homogenizing|homografa|homografo|homograph|homographic|homographs|homolog|homologa|homologable|homologacion|homologaci(o|ó)n|homologar|homologies|homologo|homologous|homologue|homology|homonima|homonimia|homonimo|homonym|homonymic|homonymies|homonyms|homonymy|homophile|homophiles|homophobe|homophone|homophones|homoplastia|homoplato|homoptero|homosexualidad|homosexualismo|homosexuality|homosexually|homotype|inhomogeneities|nonhomogeneous|orthomolecular|psychomotor|sophomore|sophomores|sophomoric|sophomorically)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing HOOT"
+echo -e "$DIV_ECHO2"
+echo -e "(crapshooters|peashooter|peashooters|sharpshooter|sharpshooters|shooter|shooters|snapshooter|snapshooters|trapshooter|trapshooters|troubleshoot|troubleshooter|troubleshooters|troubleshooting)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing HOOK"
+echo -e "$DIV_ECHO2"
+echo -e "(billhook|billhooks|buttonhook|buttonhooked|buttonhooking|buttonhooks|eyehook|eyehooks|fishhook|fishhooks|hooka|hookah|hookahs|hookas|hooked|hookedness|hookey|hookeys|hookier|hookies|hooking|hookless|hooklets|hooknose|hooknoses|hooks|hookup|hookups|hookworm|hookworms|hooky|pothook|pothooks|shook|shooks|skyhook|skyhooks|tenterhook|tenterhooks|unhook|unhooked|unhooking|unhooks)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing LUST"
+echo -e "$DIV_ECHO2"
+echo -e "(cluster|clustered|clustering|desenlustrar|deslustrador|deslustradora|deslustrar|deslustre|deslustrosa|deslustroso|enlustrecer|filustre|ilustracion|ilustraci(o|ó)n|ilustrada|ilustrado|ilustrador|ilustradora|ilustrar|ilustrativa|ilustrativo|ilustre|ilustremente|ilustres|ilustreza|ilustr(i|í)sima|ilustr(i|í)simo|lustrabotas|lustraci(o|ó)n|lustrador|lustral|lustramiento|lustrar|lustre|lustr(i|í)n|lustrina|lustro|lustrosa|lustrosamente|lustroso|palustre|perilustre)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing MEGA"
+echo -e "$DIV_ECHO2"
+echo -e "(acromegalia|acromegalic|acromegalica|acromegalico|acromegalies|acromegaly|alarmega|al(a|á)rmega|alhamega|alh(a|á)mega|megabar|megabit|megabits|megabuck|megabucks|megabyte|megabytes|megacephalous|megaciclo|megacolon|megacycle|megacycles|megadeath|megadeaths|megadyne|megadynes|megafonia|megafono|megahertz|megakaryocytic|megalith|megalithic|megaliths|megalitica|megal(i|í)tica|megalitico|megal(i|í)tico|megalito|megalomana|megal(o|ó)mana|megaloman(i|í)a|megalomaniac|megalomaniacal|megalomaniacally|megalomaniacs|megalomano|megal(o|ó)mano|megalopolises|megano|megaphone|megaphones|megapod|megarense|megass|megasse|megasses|megaterio|megatons|megavitamin|megavolt|megavolts|megawatt|megawatts|omegas)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing NUDE"
+echo -e "$DIV_ECHO2"
+echo -e "(denude|denuded|denuder|denuders|denudes|desnudez|ennudecer|menudear|menudencia|menudeo|menudera|menudero|nudely|nudeness|nuder|nudest)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing PARTNER"
+echo -e "$DIV_ECHO2"
+echo -e "(copartner|copartners|copartnership|partnered|partnering|partner|partners|partnership|partnerships|subpartnership)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing SEX"
+echo -e "$DIV_ECHO2"
+echo -e "(accessexcellence|asexuada|asexuado|asexual|bisextil|bisexualidad|bisexualismo|closex|decimasexta|decimosexta|decimosexto|heterosexual|heterosexualidad|homosexualidad|homosexualismo|homosexuality|homosexually|intersexual|intersexualidad|litisexpensas|marcasexcluvisas|sexagenaria|sexagenario|sexagesima|sexag(e|é)sima|sexagesimal|sexagesimo|sexag(e|é)simo|sexagonal|sexangula|sex(a|á)ngula|sexangulo|sex(a|á)ngulo|sexcent(e|é)sima|sexcent(e|é)simo|sexenio|sexismo|sexist|sexista|sexma|sexmero|sexmo|sexo_del_bebe|sexologa|sex(o|ó)loga|sexologia|sexolog(i|í)a|sexologo|sex(o|ó)logo|sexta|sextaferia|sextaferiar|sextantaria|sextantario|sextante|sextario|sextavada|sextavado|sextavar|sexteto|sextil|sextilla|sextillo|sextina|sexto|sextuplicaci(o|ó)n|sextuplicar|sexuada|sexuado|sexualidad|sexuality|transexualidad|transexualismo|unisex|unisexual|upsexpress)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing SOFT"
+echo -e "$DIV_ECHO2"
+echo -e "(semisoft|softbacks|softball|softballs|softbound|soften|softened|softener|softeners|softening|softens|softer|softest|softheads|softhearted|softheartedly|softheartedness|softie|softies|softly|softness|softs|software|softwares|softwood|softwoods|softy)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing TINY"
+echo -e "$DIV_ECHO2"
+echo -e "(destiny|mutiny|mutinying|satiny|scrutiny)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing TIT"
+echo -e "$DIV_ECHO2"
+echo -e "(actitar|actitud|actitudes|adscititious|adventitia|adventitial|adventitias|adventitious|adventitiously|ahoritita|altitonante|altitud|altitude|altitudes|altitudinal|altitudinous|anticompetitive|anticonstitucional|antiprostitution|antitakeover|antitank|antitanque|antitarnish|antitax|antitechnological|antitechnologies|antitechnology|antit(e|é)tic(a|o)|antiterrorism|antiterrorisms|antiterrorist|antiterrorists|antitet(a|á)nica|antitet(a|á)nico|antitheft|antitheoretical|antitheses|antithesis|antithetic|antithetical|antithetically|antithrombin|antithrombins|antithyroid|antitobacco|antit(o|ó)xica|antit(o|ó)xico|antitotalitarian|antitoxic|antitoxin|antitoxina|antitoxins|antitrades|antitraditional|antitrago|antitrinitaria|antitrinitario|antitrust|antitruster|antitrusters|antitubercular|antituberculosa|antituberculosis|antituberculoso|antituberculous|antitumor|antitumoral|antitussive|antitussives|antitype|antitypes|antityphoid|aortitis|apatite|apatites|apetite|apetitiva|apetitivo|apetito|apetitosa|apetitoso|appetite|appetites|appetitive|aptitud|aptitude|aptitudes|aptitudinal|aptitudinally|argentita|argentite|argentites|asphaltite|asphaltites|attitude|attitudes|attitudinal|attitudinally|attitudinise|attitudinised|attitudinises|attitudinising|attitudinize|attitudinized|attitudinizes|attitudinizing|backstitch|backstitched|backstitches|backstitching|bastitana|bastitano|beatitud|beatitude|beatitudes|biotite|biotites|biotitic|bipartita|bipartite|bipartitely|bipartition|bipartitions|bipartito|bismutita|botito|bushtit|bushtits|calentita|calentito|canastita|cantitativa|cantitativo|carnotite|carnotites|cartitem|catita|catite|catitear|ceisatita|celestite|celestites|cementite|cementites|cementitious|certitud|certitude|certitudes|chastities|chastity|chicorrotita|chicorrotito|chiquirritita|chiquirritito|cholecystitides|cholecystitis|cistitis|cobaltite|cobaltites|colatitude|colatitudes|colecistitis|competition|competitions|competitiva|competitive|competitively|competitiveness|competitivenesses|competitividad|competitivo|competitor|competitors|confitito|constit|constitucional|constitucionalidad|constitucionalmente|constituci(o|ó)n|constituencies|constituency|constituent|constituently|constituents|constituidor|constituidora|constituir|constituta|constitute|constituted|constitutes|constituting|constitution|constitutional|constitutionalism|constitutionalisms|constitutionalist|constitutionalists|constitutionalities|constitutionality|constitutionalization|constitutionalizations|constitutionalize|constitutionalized|constitutionalizes|constitutionalizing|constitutionally|constitutionals|constitutionless|constitutions|constitutiva|constitutive|constitutively|constitutivo|constituto|constituyente|correctitude|correctitudes|counterinstitution|counterinstitutions|counterpetition|counterpetitioned|counterpetitioning|counterpetitions|cuantitativa|cuantitativo|cuatripartita|cuatripartito|cystitides|cystitis|dacriocistitis|deglutition|deglutitions|deinstitutionalization|deinstitutionalizations|deinstitutionalize|deinstitutionalized|deinstitutionalizes|deinstitutionalizing|dentition|dentitions|dermatitides|dermatitis|dermatitises|destituci(o|ó)n|destituible|destituidor|destituidora|destituir|destitulada|destitulado|destitute|destituteness|destitutenesses|destitution|destitutions|dietitian|dietitians|disentitle|disentitled|disentitles|disentitling|disquantitied|disquantities|disquantity|disquantitying|disubstituted|divestiture|divestitures|doctitud|empr(e|é)stito|entitativa|entitativo|entities|entitle|entitled|entitlement|entitlements|entitles|entitling|entity|estalactita|esteatita|estitiquez|estomatitis|etites|exactitud|exactitude|exactitudes|excrementitious|factitious|factitiously|factitiousness|factitiousnesses|factitiva|factitive|factitively|factitivo|featherstitch|featherstitched|featherstitches|featherstitching|fictitious|fictitiously|fictitiousness|fictitiousnesses|fortitud|fortitude|fortitudes|galactita|galactites|galatites|getit|giobertita|gratitud|gratitude|gratitudes|haematite|haematites|hematite|hematites|hematitic|hemstitch|hemstitched|hemstitcher|hemstitchers|hemstitches|hemstitching|hepatitides|hepatitis|hitita|hydroxyapatite|hydroxyapatites|hydroxylapatite|hydroxylapatites|hypercompetitive|identities|identity|inaptitude|inaptitudes|incertitud|incertitude|incertitudes|inconstitucional|inconstitucionalidad|ineptitud|ineptitude|ineptitudes|inexactitud|inexactitude|inexactitudes|ingratitud|ingratitude|ingratitudes|institor|institucional|institucionalidad|institucionalizaci(o|ó)n|institucionalizar|institucionalmente|institucionista|instituci(o|ó)n|instituente|instituidor|instituidora|instituir|instituta|institute|instituted|instituter|instituters|institutes|instituting|institution|institutional|institutionalise|institutionalised|institutionalises|institutionalising|institutionalism|institutionalisms|institutionalist|institutionalists|institutionalization|institutionalizations|institutionalize|institutionalized|institutionalizes|institutionalizing|institutionally|institutions|instituto|institutor|institutora|institutors|institutriz|insubstituible|insustituible|interinstitutional|interstit|interstitial|interstitially|intersubstitutabilities|intersubstitutability|intersubstitutable|intitle|intitled|intitles|intitling|intitulaci(o|ó)n|intitular|intitule|intituled|intitules|intituling|investiture|investitures|jactitation|jactitations|keratitides|keratitis|latitante|latitar|latitud|latitude|latitudes|latitudinal|latitudinally|latitudinaria|latitudinarian|latitudinarianism|latitudinarianisms|latitudinarians|latitudinario|latitudinarismo|lentitud|lockstitch|lockstitched|lockstitches|lockstitching|magnetite|magnetites|malpractitioner|malpractitioners|mastitic|mastitides|mastitis|midlatitude|midlatitudes|mimetite|mimetites|mistitle|mistitled|mistitles|mistitling|multipartite|multitalented|multitask|multitasked|multitasking|multitaskings|multitasks|multiterminal|multitiered|multiton|multitone|multitowered|multitrack|multitracked|multitracking|multitracks|multitrillion|multitrillions|multitud|multitude|multitudes|multitudinaria|multitudinario|multitudinous|multitudinously|multitudinousness|multitudinousnesses|nictitante|nictitate|nictitated|nictitates|nictitating|noncompetition|noncompetitive|noncompetitor|noncompetitors|nonconstitutional|nonentities|nonentity|nonidentities|nonidentity|noninstitutional|noninstitutionalized|nonquantitative|nontitle|otitic|otitides|otitis|ouistiti|ouistitis|panclastita|pancreatitides|pancreatitis|parotitis|parotitises|partita|partitas|partite|partition|partitioned|partitioner|partitioners|partitioning|partitionist|partitionists|partitions|partitiva|partitive|partitively|partitivo|partitura|patita|patitiesa|patitieso|patituerta|patituerto|pegmatita|pegmatite|pegmatites|pegmatitic|peridotite|peridotites|peridotitic|periostitis|periostitises|petit|petite|petiteness|petitenesses|petites|petition|petitionary|petitioned|petitioner|petitioners|petitioning|petitions|petitoria|petitorio|pettitoes|platitude|platitudes|platitudinal|platitudinarian|platitudinarians|platitudinize|platitudinized|platitudinizes|platitudinizing|platitudinous|platitudinously|plentitude|plentitudes|poortith|poortiths|postdivestiture|potito|practitioner|practitioners|promptitude|promptitudes|prontitud|prostatitis|prostatitises|prostit|prostituci(o|ó)n|prostituir|prostituta|prostitute|prostituted|prostitutes|prostituting|prostitution|prostitutions|prostituto|prostitutor|prostitutors|proustite|proustites|pyrrhotite|pyrrhotites|quadripartite|quantitate|quantitated|quantitates|quantitating|quantitation|quantitations|quantitative|quantitatively|quantitativeness|quantitativenesses|quantities|quantity|queratitis|ratite|ratites|reconstituci(o|ó)n|reconstituir|reconstitute|reconstituted|reconstitutes|reconstituting|reconstitution|reconstitutions|reconstituyente|rectitud|rectitude|rectitudes|rectitudinous|reinstitute|reinstituted|reinstitutes|reinstituting|reinstitutionalization|reinstitutionalizations|reinstitutionalize|reinstitutionalized|reinstitutionalizes|reinstitutionalizing|repartition|repartitioned|repartitioning|repartitions|repetition|repetitional|repetitions|repetitious|repetitiously|repetitiousness|repetitiousnesses|repetitive|repetitively|repetitiveness|repetitivenesses|restitch|restitched|restitches|restitching|restituci(o|ó)n|restituible|restituidor|restituidora|restituir|restitute|restituted|restitutes|restituting|restitution|restitutions|restitutoria|restitutorio|retitle|retitled|retitles|retitling|sacrosanctities|sacrosanctity|sanctities|sanctity|semiquantitative|semiquantitatively|senectitude|senectitudes|shergottite|shergottites|smaltite|smaltites|smectite|smectites|smectitic|solstitial|sortition|sortitions|sostituir|spessartite|spessartites|stalactite|stalactites|stalactitic|steatite|steatites|steatitic|stitch|stitched|stitcher|stitcheries|stitchers|stitchery|stitches|stitching|stitchwort|stitchworts|stithied|stithies|stithy|stithying|stomatitides|stomatitis|stomatitises|subreptitious|subreptitiously|substituci(o|ó)n|substitude|substituent|substituents|substituible|substituidor|substituidora|substituir|substituta|substitutabilities|substitutability|substitutable|substitute|substituted|substitutes|substituting|substitution|substitutional|substitutionally|substitutionary|substitutions|substitutiva|substitutive|substitutively|substitutivo|substituto|subtitle|subtitled|subtitles|subtitling|subtitular|sup(e|é)rstite|supercompetitive|superstition|superstitions|superstitious|superstitiously|supposititious|supposititiously|surreptitious|surreptitiously|sustituci(o|ó)n|sustituible|sustituidor|sustituidora|sustituir|sustituta|sustitutiva|sustitutivo|sustituto|tectite|tectites|tektite|tektites|tektitic|tita|tit(a|á)n|tit(a|á)nica|tit(a|á)nico|titan|titanate|titanates|titaness|titanesses|titania|titanias|titanic|titanically|titaniferous|titanio|titanism|titanisms|titanite|titanites|titanium|titaniums|titanous|titans|titar|titbit|titbits|titear|titeo|titer|titerera|titerero|titeretada|titerista|titers|titfer|titfers|tithable|tithe|tithed|tither|tithers|tithes|tithing|tithings|tithonia|tithonias|titi|titian|titians|titiaro|tit(i|í)|tit(i|í)malo|titilaci(o|ó)n|titilador|titiladora|titilar|titileo|titillate|titillated|titillates|titillating|titillatingly|titillation|titillations|titillative|titirimundi|titiritaina|titiritar|titiritera|titiritero|titis|titivate|titivated|titivates|titivating|titivation|titivations|titlark|titlarks|title|titled|titleholder|titleholders|titles|titling|titlist|titlists|titman|titmen|titmice|titmouse|tito|titrable|titrant|titrants|titratable|titrate|titrated|titrates|titrating|titration|titrations|titrator|titrators|titre|titres|titrimetric|titter|tittered|titterer|titterers|tittering|titters|tittivate|tittivated|tittivates|tittivating|tittle|tittles|tittup|tittuped|tittuping|tittupped|tittupping|tittuppy|tittups|titty|titubar|titubear|titubeo|titulaci(o|ó)n|titulada|titulado|titular|titularidad|titularies|titularizaci(o|ó)n|titularizar|titularly|titulars|titulary|titulatura|titulillo|titulo|titundia|tituvear|tituveo|tomtit|tomtits|tontito|topstitch|topstitched|topstitches|topstitching|torrotito|tortita|transvestite|transvestites|tripartita|tripartite|tripartito|trisubstituted|unchastities|unchastity|uncompetitive|uncompetitiveness|uncompetitivenesses|unconstitutional|unconstitutionalities|unconstitutionality|unconstitutionally|unstitch|unstitched|unstitches|unstitching|untitled|vastities|vastitude|vastitudes|vastity|veintitr(e|é)s|veintitres|whipstitch|whipstitched|whipstitches|whipstitching|zaratite|zaratites)"
+echo -e "\n\n"
+echo -e "$DIV_ECHO2"
+echo -e "# Words containing TOPP"
+echo -e "$DIV_ECHO2"
+echo -e "(blacktopped|blacktopping|estoppage|estopped|estoppel|estoppels|estopping|overtopped|overtopping|stoppage|stoppages|stopped|stopper|stoppered|stoppering|stoppers|stopping|stopple|stoppled|stopples|stoppling|topped|topper|toppers|topping|toppings|topple|toppled|toppling|unstoppable|unstopped|unstopping)"
+echo -e "\n\n"
+} >> "$ERXP_LIST"
+
+#-----------------------------------------------------------------------------#
+# Changing bannedmimetypes and exceptionmimetypes
+#-----------------------------------------------------------------------------#
+> "$BMT_LIST";
+echo -e "application/x-msn-messenger\t\t# Live Messenger" >> "$BMT_LIST"
+echo -e "#application/x-msn-messenger\t\t# Live Messenger" >> "$EMT_LIST"
+echo -e "application/ymsgr\t\t# Yahoo-Messenger" >> "$BMT_LIST"
+echo -e "#application/ymsgr\t\t# Yahoo-Messenger" >> "$EMT_LIST"
+echo -e "application/x-bittorrent\t\t# Torrent" >> "$BMT_LIST"
+echo -e "#application/x-bittorrent\t\t# Torrent" >> "$EMT_LIST"
+#==============================================================================#
+echo	"Customizing Dansguardian filter list with URLBigBlacklist..."
+#------------------------------------------------------------------------------#
+# Creating temporary site and urls lists
+#-----------------------------------------------------------------------------#
+touch "$BL_URLS"
+touch "$BL_DOMAINS"
+#==============================================================================#
+#	Customizing default site access list
+#------------------------------------------------------------------------------#
+{
+echo -e "$DIV_ECHO2"
+echo -e "#\t\tAllows Government and Education root domains"
+echo -e "$DIV_ECHO2"
+echo -e ".gov"
+echo -e ".edu"
+echo -e ".mil"
+echo -e "$DIV_ECHO2"
+echo -e "#\t\tAllows SSL Autentication for Secure Sites"
+echo -e "$DIV_ECHO2"
+echo -e "digitalriver.com"
+echo -e "verisign.com"
+echo -e "$DIV_ECHO2"
+echo -e "#\t\tAccess for applications and systems"
+echo -e "$DIV_ECHO2"
+sed 's|'^.'||g' "$SQUID_ACLS/domains_update.acl"
+echo -e "#"
+sed 's|'^.'||g' "$SQUID_ACLS/domains_office365.acl"
+echo -e "$DIV_ECHO2"
+echo -e "#\t\tSystem Security Applications"
+echo -e "$DIV_ECHO2"
+sed 's|'^.'||g' "$SQUID_ACLS/domains_antimalware.acl"
+echo -e "$DIV_ECHO2"
+echo -e "#\t\tMail and Login"
+echo -e "$DIV_ECHO2"
+sed 's|'^.'||g' "$SQUID_ACLS/domains_webmail.acl"
+echo -e "$DIV_ECHO2"
+} >> "$DXS_LIST"
+#==============================================================================#
+#	Customizing default url access list
+#------------------------------------------------------------------------------#
+{
+echo -e "$DIV_ECHO2"
+echo -e "\n#\tApplications for viewing Internet content"
+echo -e "$DIV_ECHO2"
+echo -e "google.com/a"
+echo -e "google.com/apps"
+echo -e "google.com/chrome"
+echo -e "apple.com/safari"
+echo -e "apple.com/itunes"
+echo -e "\n"
+} >> "$DXU_LIST"
+#-----------------------------------------------------------------------------#
+# Merging URLBigBlacklists Expressions
+#-----------------------------------------------------------------------------#
+{
+echo -e "$DIV_ECHO1\n#\tURLBigBlacklists Filtered Regular Expressions"
+echo -e "$DIV_ECHO1"
+echo -e "#${INCLUDE_BL}/ads/expressions>" 
+echo -e "#${INCLUDE_BL}/malware/expressions>" 
+echo -e "#${INCLUDE_BL}/porn/expressions>" 
+echo -e "\n"
+} >> "$BRXP_LIST"
+#-----------------------------------------------------------------------------#
+# Change filter urls blacklists
+#-----------------------------------------------------------------------------#
+> "$BL_URLS"
+{
+echo -e "$DIV_ECHO1"
+echo -e "# Default Exception URLs List - DO NOT CHANGE"
+echo -e "$DIV_ECHO2"
+echo -e "#.Include</etc/dansguardian/lists/defaultexceptionurllist>"
+echo -e "$DIV_ECHO1"
+echo -e "# Add individual urls below this line:"
+echo -e "\n\n\n\n"
+echo -e "$DIV_ECHO1"
+echo -e "#"
+echo -e "#\tURLBigblacklists Categories"
+echo -e "#\tURLS Lists"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAdult, Offensive Content, Porn, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/adult/urls>"
+echo -e "#${INCLUDE_BL}/lingerie/urls>"
+echo -e "#${INCLUDE_BL}/mixed_adult/urls>"
+echo -e "#${INCLUDE_BL}/naturism/urls>"
+echo -e "#${INCLUDE_BL}/porn/urls>"
+echo -e "#${INCLUDE_BL}/sexuality/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAdvertisement, Banners, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/ads/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAggressive, Hate, Violence, Weapons, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/aggressive/urls>"
+echo -e "#${INCLUDE_BL}/guns/urls>"
+echo -e "#${INCLUDE_BL}/hunting/urls>"
+echo -e "#${INCLUDE_BL}/violence/urls>"
+echo -e "#${INCLUDE_BL}/weapons/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAlcohol, Tobacco, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/alcohol/urls>"
+echo -e "#${INCLUDE_BL}/tobacco/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAnimal Care, Food, Home Improvement, Lifestyle, Traveling, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/gardening/urls>"
+echo -e "#${INCLUDE_BL}/homerepair/urls>"
+echo -e "#${INCLUDE_BL}/pets/urls>"
+echo -e "#${INCLUDE_BL}/vacation/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tArts, Enterntainment, Gossips, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/artnudes/urls>"
+echo -e "#${INCLUDE_BL}/astrology/urls>"
+echo -e "#${INCLUDE_BL}/celebrity/urls>"
+echo -e "#${INCLUDE_BL}/entertainment/urls>"
+echo -e "#${INCLUDE_BL}/humor/urls>"
+echo -e "#${INCLUDE_BL}/manga/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tBanking, Currency, Financial and Online Payment"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/banking/urls>"
+echo -e "#${INCLUDE_BL}/financial/urls>"
+echo -e "#${INCLUDE_BL}/personalfinance/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tBlogs and Forums"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/blog/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tBooks, Child Care, Education, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/books/urls>"
+echo -e "#${INCLUDE_BL}/child/urls>"
+echo -e "#${INCLUDE_BL}/childcare/urls>"
+echo -e "#${INCLUDE_BL}/educational_games/urls>"
+echo -e "#${INCLUDE_BL}/frencheducation/urls>"
+echo -e "#${INCLUDE_BL}/translation/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tComputer Security and System Maintenance"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/antispyware/urls>"
+echo -e "#${INCLUDE_BL}/cleaning/urls>"
+echo -e "#${INCLUDE_BL}/remote-control/urls>"
+echo -e "#${INCLUDE_BL}/updatesites/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tComputer Security Threats"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/desktopsillies/urls>"
+echo -e "#${INCLUDE_BL}/dialers/urls>"
+echo -e "#${INCLUDE_BL}/hacking/urls>"
+echo -e "#${INCLUDE_BL}/malware/urls>"
+echo -e "#${INCLUDE_BL}/phishing/urls>"
+echo -e "#${INCLUDE_BL}/proxy/urls>"
+echo -e "#${INCLUDE_BL}/virusinfected/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tContent Sharing (Audio, Photo, Video)"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/audio-video/urls>"
+echo -e "#${INCLUDE_BL}/filehosting/urls>"
+echo -e "#${INCLUDE_BL}/filesharing/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tElectronic Commerce, Marketing, Online Auctions, Shopping Online, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/bitcoin/urls>"
+echo -e "#${INCLUDE_BL}/ecommerce/urls>"
+echo -e "#${INCLUDE_BL}/marketingware/urls>"
+echo -e "#${INCLUDE_BL}/onlineauctions/urls>"
+echo -e "#${INCLUDE_BL}/shopping/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tGoods and Services"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/jobsearch/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tFashion"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/reaffected/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tGambling, Gaming, Time Wasting, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/gambling/urls>"
+echo -e "#${INCLUDE_BL}/games/urls>"
+echo -e "#${INCLUDE_BL}/kidstimewasting/urls>"
+echo -e "#${INCLUDE_BL}/onlinegames/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tGovernment, Military, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/government/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tHealth, Hygiene, Medical, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/abortion/urls>"
+echo -e "#${INCLUDE_BL}/contraception/urls>"
+echo -e "#${INCLUDE_BL}/medical/urls>"
+echo -e "#${INCLUDE_BL}/sexualityeducation/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tIllegal Activities"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/drugs/urls>"
+echo -e "#${INCLUDE_BL}/warez/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tInformation, Magazines, News, Radio, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/magazines/urls>"
+echo -e "#${INCLUDE_BL}/news/urls>"
+echo -e "#${INCLUDE_BL}/press/urls>"
+echo -e "#${INCLUDE_BL}/radio/urls>"
+echo -e "#${INCLUDE_BL}/sportnews/urls>"
+echo -e "#${INCLUDE_BL}/sports/urls>"
+echo -e "#${INCLUDE_BL}/weather/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tInternet Mail and Webmail"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/mail/urls>"
+echo -e "#${INCLUDE_BL}/webmail/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tMobile Phone and Gadgets"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/mobile-phone/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tReligion and Sect beliefs"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/religion/urls>"
+echo -e "#${INCLUDE_BL}/sect/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tChat, Dating, Social Networking, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/chat/urls>"
+echo -e "#${INCLUDE_BL}/dating/urls>"
+echo -e "#${INCLUDE_BL}/instantmessaging/urls>"
+echo -e "#${INCLUDE_BL}/socialnetworking/urls>"
+echo -e "#${INCLUDE_BL}/social_networks/urls>"
+echo -e "#"
+echo -e "$DIV_ECHO1"
+echo -e "#\tWhitelist"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/whitelist/urls>"
+echo -e "#"
+} >> "$BL_URLS"
+#-----------------------------------------------------------------------------#
+cp "$BL_URLS" "$BU_LIST"
+cp "$BL_URLS" "$EU_LIST"
+cp "$BL_URLS" "$GU_LIST"
+#-----------------------------------------------------------------------------#
+# Change filter site blacklists
+#-----------------------------------------------------------------------------#
+> "$BL_DOMAINS"
+{
+echo -e "$DIV_ECHO1"
+echo -e "\n"
+echo -e "# Default Exception Site List - DO NOT CHANGE"
+echo -e "$DIV_ECHO2"
+echo -e ".Include</etc/dansguardian/lists/defaultexceptionsitelist>"
+echo -e "$DIV_ECHO1"
+echo -e "# Add individual domains below this line:"
+echo -e "\n\n\n\n"
+echo -e "$DIV_ECHO1"
+echo -e "#\tAdult, Offensive Content, Porn, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/adult/domains>"
+echo -e "#${INCLUDE_BL}/lingerie/domains>"
+echo -e "#${INCLUDE_BL}/mixed_adult/domains>"
+echo -e "#${INCLUDE_BL}/naturism/domains>"
+echo -e "#${INCLUDE_BL}/porn/domains>"
+echo -e "#${INCLUDE_BL}/sexuality/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tAdvertisement, Banners, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/ads/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tAggressive, Hate, Violence, Weapons, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/aggressive/domains>"
+echo -e "#${INCLUDE_BL}/guns/domains>"
+echo -e "#${INCLUDE_BL}/hunting/domains>"
+echo -e "#${INCLUDE_BL}/violence/domains>"
+echo -e "#${INCLUDE_BL}/weapons/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tAlcohol, Tobacco, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/alcohol/domains>"
+echo -e "#${INCLUDE_BL}/beerliquorinfo/domains>"
+echo -e "#${INCLUDE_BL}/beerliquorsale/domains>"
+echo -e "#${INCLUDE_BL}/tobacco/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tAnimal Care, Food, Home Improvement, Lifestyle, Traveling, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/cooking/domains>"
+echo -e "#${INCLUDE_BL}/culinary/domains>"
+echo -e "#${INCLUDE_BL}/gardening/domains>"
+echo -e "#${INCLUDE_BL}/homerepair/domains>"
+echo -e "#${INCLUDE_BL}/pets/domains>"
+echo -e "#${INCLUDE_BL}/vacation/domains>"
+echo -e "\nDIV_ECHO1"
+echo -e "#\tArts, Enterntainment, Gossips, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/artnudes/domains>"
+echo -e "#${INCLUDE_BL}/astrology/domains>"
+echo -e "#${INCLUDE_BL}/celebrity/domains>"
+echo -e "#${INCLUDE_BL}/entertainment/domains>"
+echo -e "#${INCLUDE_BL}/humor/domains>"
+echo -e "#${INCLUDE_BL}/manga/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tBanking, Currency, Financial and Online Payment"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/bank/domains>"
+echo -e "#${INCLUDE_BL}/banking/domains>"
+echo -e "#${INCLUDE_BL}/financial/domains>"
+echo -e "#${INCLUDE_BL}/onlinepayment/domains>"
+echo -e "#${INCLUDE_BL}/personalfinance/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tBlogs and Forums"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/blog/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tBooks, Child Care, Education, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/books/domains>"
+echo -e "#${INCLUDE_BL}/child/domains>"
+echo -e "#${INCLUDE_BL}/childcare/domains>"
+echo -e "#${INCLUDE_BL}/educational_games/domains>"
+echo -e "#${INCLUDE_BL}/frencheducation/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tComputer Security and System Maintenance"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/antispyware/domains>"
+echo -e "#${INCLUDE_BL}/cleaning/domains>"
+echo -e "#${INCLUDE_BL}/remote-control/domains>"
+echo -e "#${INCLUDE_BL}/updatesites/domains>"
+echo -e "#${INCLUDE_BL}/verisign/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tComputer Security Threats"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/desktopsillies/domains>"
+echo -e "#${INCLUDE_BL}/dialers/domains>"
+echo -e "#${INCLUDE_BL}/hacking/domains>"
+echo -e "#${INCLUDE_BL}/malware/domains>"
+echo -e "#${INCLUDE_BL}/phishing/domains>"
+echo -e "#${INCLUDE_BL}/proxy/domains>"
+echo -e "#${INCLUDE_BL}/spyware/domains>"
+echo -e "#${INCLUDE_BL}/virusinfected/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tContent Sharing (Audio, Photo, Video)"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/audio-video/domains>"
+echo -e "#${INCLUDE_BL}/filehosting/domains>"
+echo -e "#${INCLUDE_BL}/filesharing/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tElectronic Commerce, Marketing, Online Auctions, Shopping Online, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/bitcoin/domains>"
+echo -e "#${INCLUDE_BL}/ecommerce/domains>"
+echo -e "#${INCLUDE_BL}/marketingware/domains>"
+echo -e "#${INCLUDE_BL}/onlineauctions/domains>"
+echo -e "#${INCLUDE_BL}/shopping/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tFashion"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/clothing/domains>"
+echo -e "#${INCLUDE_BL}/jewelry/domains>"
+echo -e "#${INCLUDE_BL}/reaffected/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tGambling, Gaming, Time Wasting, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/arjel/domains>"
+echo -e "#${INCLUDE_BL}/gambling/domains>"
+echo -e "#${INCLUDE_BL}/games/domains>"
+echo -e "#${INCLUDE_BL}/kidstimewasting/domains>"
+echo -e "#${INCLUDE_BL}/onlinegames/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tGoods and Services."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/jobsearch/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tGovernment, Military, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/government/domains>"
+echo -e "\nDIV_ECHO1"
+echo -e "#\tHealth, Hygiene, Medical, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/abortion/domains>"
+echo -e "#${INCLUDE_BL}/contraception/domains>"
+echo -e "#${INCLUDE_BL}/hygiene/domains>"
+echo -e "#${INCLUDE_BL}/medical/domains>"
+echo -e "#${INCLUDE_BL}/sexualityeducation/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tIllegal Activities"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/drugs/domains>"
+echo -e "#${INCLUDE_BL}/warez/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tInternet Search Engines"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/searchengines/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tInternet Mail and Webmail"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/mail/domains>"
+echo -e "#${INCLUDE_BL}/webmail/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tMobile Phone and Gadgets"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/cellphones/domains>"
+echo -e "#${INCLUDE_BL}/mobile-phone/domains>"
+echo -e "#${INCLUDE_BL}/ringtones/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tInformation, Magazines, News, Radio, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/magazines/domains>"
+echo -e "#${INCLUDE_BL}/news/domains>"
+echo -e "#${INCLUDE_BL}/press/domains>"
+echo -e "#${INCLUDE_BL}/radio/domains>"
+echo -e "#${INCLUDE_BL}/sportnews/domains>"
+echo -e "#${INCLUDE_BL}/sports/domains>"
+echo -e "#${INCLUDE_BL}/weather/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tReligion and Sect beliefs"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/religion/domains>"
+echo -e "#${INCLUDE_BL}/sect/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tChat, Dating, Social Networking, etc."
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/chat/domains>"
+echo -e "#${INCLUDE_BL}/dating/domains>"
+echo -e "#${INCLUDE_BL}/instantmessaging/domains>"
+echo -e "#${INCLUDE_BL}/social_networks/domains>"
+echo -e "#${INCLUDE_BL}/socialnetworking/domains>"
+echo -e "\n$DIV_ECHO1"
+echo -e "#\tWhitelist"
+echo -e "$DIV_ECHO2"
+echo -e "#${INCLUDE_BL}/whitelist/domains>"
+echo -e "\n"
+} >> "$BL_DOMAINS"
+#-----------------------------------------------------------------------------#
+cp "$BL_DOMAINS" "$BS_LIST"
+cp "$BL_DOMAINS" "$ES_LIST"
+cp "$BL_DOMAINS" "$GS_LIST"
+#-----------------------------------------------------------------------------#
+sed -i '9 a\\weebo.com' "$BS_LIST"
+sed -i '9 a\\#twitter.com' "$BS_LIST"
+sed -i '9 a\\orkut.com' "$BS_LIST"
+sed -i '9 a\\myspace.com' "$BS_LIST"
+sed -i '9 a\\myprofile.com' "$BS_LIST"
+sed -i '9 a\\#facebook.com' "$BS_LIST"
+sed -i 's|#facebook.com|facebook.com|g' "$BS_LIST"
+sed -i 's|#twitter.com|twitter.com|g' "$BS_LIST"
+#-----------------------------------------------------------------------------#
+# Enable list of blocked domains
+#-----------------------------------------------------------------------------#
+sed -i 's|#'${INCLUDE_BL}/ads'|'${INCLUDE_BL}/ads'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/adult'|'${INCLUDE_BL}/adult'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/aggressive'|'${INCLUDE_BL}/aggressive'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/alcohol'|'${INCLUDE_BL}/alcohol'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/arjel'|'${INCLUDE_BL}/arjel'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/beerliquorinfo'|'${INCLUDE_BL}/beerliquorinfo'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/beerliquorsale'|'${INCLUDE_BL}/beerliquorsale'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/chat'|'${INCLUDE_BL}/chat'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/dating'|'${INCLUDE_BL}/dating'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/desktopsillies'|'${INCLUDE_BL}/desktopsillies'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/dialers'|'${INCLUDE_BL}/dialers'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/drugs'|'${INCLUDE_BL}/drugs'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/filehosting'|'${INCLUDE_BL}/filehosting'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/filesharing'|'${INCLUDE_BL}/filesharing'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/gambling'|'${INCLUDE_BL}/gambling'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/games'|'${INCLUDE_BL}/games'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/guns'|'${INCLUDE_BL}/guns'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/hacking'|'${INCLUDE_BL}/hacking'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/hunting'|'${INCLUDE_BL}/hunting'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/instantmessaging'|'${INCLUDE_BL}/instantmessaging'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/kidstimewasting'|'${INCLUDE_BL}/kidstimewasting'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/lingerie'|'${INCLUDE_BL}/lingerie'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/malware'|'${INCLUDE_BL}/malware'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/manga'|'${INCLUDE_BL}/manga'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/mixed_adult'|'${INCLUDE_BL}/mixed_adult'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/naturism'|'${INCLUDE_BL}/naturism'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/onlinegames'|'${INCLUDE_BL}/onlinegames'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/phishing'|'${INCLUDE_BL}/phishing'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/porn'|'${INCLUDE_BL}/porn'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/proxy'|'${INCLUDE_BL}/proxy'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/sexuality'|'${INCLUDE_BL}/sexuality'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/socialnetworking'|'${INCLUDE_BL}/socialnetworking'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/social_networks'|'${INCLUDE_BL}/social_networks'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/spyware'|'${INCLUDE_BL}/spyware'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/tobacco'|'${INCLUDE_BL}/tobacco'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/violence'|'${INCLUDE_BL}/violence'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/virusinfected'|'${INCLUDE_BL}/virusinfected'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/warez'|'${INCLUDE_BL}/warez'|g' "$BS_LIST"
+sed -i 's|#'${INCLUDE_BL}/weapons'|'${INCLUDE_BL}/weapons'|g' "$BS_LIST"
+#-----------------------------------------------------------------------------#
+# Enable list of allowed domains
+#-----------------------------------------------------------------------------#
+sed -i 's|#'${INCLUDE_BL}/abortion'|'${INCLUDE_BL}/abortion'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/antispyware'|'${INCLUDE_BL}/antispyware'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/bank'|'${INCLUDE_BL}/bank'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/banking'|'${INCLUDE_BL}/banking'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/books'|'${INCLUDE_BL}/books'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/childcare'|'${INCLUDE_BL}/childcare'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/child'|'${INCLUDE_BL}/child'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/cleaning'|'${INCLUDE_BL}/cleaning'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/contraception'|'${INCLUDE_BL}/contraception'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/cooking'|'${INCLUDE_BL}/cooking'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/culinary'|'${INCLUDE_BL}/culinary'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/financial'|'${INCLUDE_BL}/financial'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/gardening'|'${INCLUDE_BL}/gardening'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/government'|'${INCLUDE_BL}/government'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/homerepair'|'${INCLUDE_BL}/homerepair'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/hygiene'|'${INCLUDE_BL}/hygiene'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/jobsearch'|'${INCLUDE_BL}/jobsearch'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/magazines'|'${INCLUDE_BL}/magazines'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/mail'|'${INCLUDE_BL}/mail'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/medical'|'${INCLUDE_BL}/medical'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/news'|'${INCLUDE_BL}/news'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/onlinepayment'|'${INCLUDE_BL}/onlinepayment'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/personalfinance'|'${INCLUDE_BL}/personalfinance'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/pets'|'${INCLUDE_BL}/pets'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/press'|'${INCLUDE_BL}/press'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/religion'|'${INCLUDE_BL}/religion'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/remote-control'|'${INCLUDE_BL}/remote-control'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/sportnews'|'${INCLUDE_BL}/sportnews'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/sports'|'${INCLUDE_BL}/sports'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/updatesites'|'${INCLUDE_BL}/updatesites'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/vacation'|'${INCLUDE_BL}/vacation'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/verisign'|'${INCLUDE_BL}/verisign'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/weather'|'${INCLUDE_BL}/weather'|g' "$ES_LIST"
+sed -i 's|#'${INCLUDE_BL}/webmail'|'${INCLUDE_BL}/webmail'|g' "$ES_LIST"
+#-----------------------------------------------------------------------------#
+# Creates Filter Groups directories
+#-----------------------------------------------------------------------------#
+for s in $(seq 1 6)
+do
+	mkdir $DG_LIST/filter"$s" &> /dev/null
+	cp $DG_LIST/*list $DG_LIST/filter"$s"
+	cp $DG_LIST/pics $DG_LIST/filter"$s"
+	rm $DG_LIST/filter"$s"/bannediplist
+	rm $DG_LIST/filter"$s"/exceptioniplist
+	rm $DG_LIST/filter"$s"/filtergroupslist
+done
+#==============================================================================#
+echo	"Installing URLBigBlacklist..."
+#------------------------------------------------------------------------------#
+cd $DG_LIST
+if [[ ! -f ~/blacklists.tgz ]]
+then
+	wget -c "$BL_DWNLD" -O ~/blacklists.tgz
+fi
+tar xvzf ~/blacklists.tgz
+find $BLACKLISTS_DIR -name "domains" -execdir cp {} {}.processed \;
+find $BLACKLISTS_DIR -name "urls" -execdir cp {} {}.processed \;
+chown -R root:root $BLACKLISTS_DIR
+#
+#==============================================================================#
+echo -e	"Restarting Squid3/Dansguardian services"
+#------------------------------------------------------------------------------#
+service dansguardian stop
+service squid3 stop
+squid3 -z
+service squid3 start
+service dansguardian start
+#=============================================================================#
+echo	"Rebooting system..."
+#-----------------------------------------------------------------------------#
+reboot

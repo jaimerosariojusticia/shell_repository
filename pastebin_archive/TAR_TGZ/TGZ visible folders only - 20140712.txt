@@ -1,0 +1,6 @@
+SRC_DIR="/home/user"
+DST_DIR="/mnt/BACKUP"
+find "$SRC_DIR" -not -path '*/.*/*' -not -name '.*' -type d | while read DIR
+do TARGZ=$(echo "$DIR" | cut -d "/" -f2)
+tar -czpf "$DST_DIR"/"$TARGZ".tgz "$DIR"
+done

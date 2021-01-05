@@ -1,0 +1,16 @@
+#!/bin/bash
+
+for ADUSER in $(wbinfo -u --domain="$(wbinfo --own-domain)" | sort)
+    do WBSEP=$(wbinfo --separator)
+        ADUNAME=$(wbinfo -i "$ADUSER" | cut -d ":" -f5)
+        UINFO=$(wbinfo -i "$ADUSER" | cut -d ":" -f4)
+        SIDG=$(wbinfo -G "$UINFO")
+        GROUPID=$(wbinfo -s "$SIDG" | sed 's/.\{1\}$//' | cut -d "$WBSEP" -f2)
+        echo -e "$ADUSER ($ADUNAME)\n$(printf '%.s-' {1..32})\n\t[*] $GROUPID"
+            for GID in $(wbinfo -r "$ADUSER")
+                do SID=$(wbinfo -G "$GID")
+                GROUP=$(wbinfo -s "$SID" | cut -d " " -f1,2)
+                echo -e "\t[ ] $(echo -e "${GROUP/%?/}" | cut -d "$WBSEP" -f2)"
+                done | sed '1d'
+        echo -e "$(printf '%.s=' {1..32})\n"
+    done

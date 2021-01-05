@@ -1,0 +1,17 @@
+#!/bin/bash
+BACKUP_SRV="/mnt/tgz-backup/"
+EXCLUDE="/usr/share/exclude.list"
+CURRENTDAY=$(date +%F)
+CURRENTMONTH=$(date +%Y-%m)
+#
+find /mnt/UserData/ -maxdepth 1 -mindepth 1 -type d | while read -r d
+do DSTDIR=$BACKUP_SRV/UserData
+TARGZ=$(echo "$d" | cut -d "/" -f5)
+if [ -f "$DSTDIR"/"$TARGZ"_full.tgz ]
+then
+        mkdir "$DSTDIR"/"$CURRENTMONTH" > /dev/null 2>&1
+        tar -czf "$DSTDIR"/"$CURRENTMONTH"/"$TARGZ"_"$CURRENTDAY".tgz "$d" --newer-mtime '20 hours ago' -X $EXCLUDE
+else
+        tar -czf "$DSTDIR"/"$TARGZ"_full.tgz "$d" -X $EXCLUDE
+fi
+done
